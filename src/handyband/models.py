@@ -92,6 +92,26 @@ class DrumGestureStatus:
     recent_event: DrumEvent | None
 
 
+@dataclass(frozen=True, slots=True)
+class FingerGestureEvent:
+    """A stable numbered hand shape that passed the per-hand safety interval."""
+
+    handedness: str
+    gesture: int
+    timestamp_ms: int
+
+
+@dataclass(frozen=True, slots=True)
+class FingerGestureStatus:
+    """Per-hand numbered-gesture state shown by the development overlay."""
+
+    handedness: str
+    phase: str
+    candidate_gesture: int | None
+    confirmed_gesture: int | None
+    recent_event: FingerGestureEvent | None
+
+
 def correct_handedness(label: str, *, mirrored: bool) -> str:
     """Return anatomical handedness when inference used a mirrored frame."""
 

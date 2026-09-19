@@ -1,0 +1,28 @@
+"""Music styles and their gesture/audio pairing."""
+
+from pathlib import Path
+
+from handyband.drum_audio import DrumAudioPlayer
+from handyband.drum_gesture import DrumGestureRecognizer
+from handyband.finger_audio import FingerAudioPlayer
+from handyband.finger_gesture import FingerGestureRecognizer
+
+
+class Odysseus:
+    """Open-hand downstroke drums plus numbered finger gestures."""
+
+    name = "Odysseus"
+    sound_path = Path("HandyBand_Audio/Odysseus/drum.wav")
+    finger_sound_paths = {
+        gesture: Path(f"HandyBand_Audio/Odysseus/od_oboe_{gesture:02d}.wav")
+        for gesture in range(1, 5)
+    }
+
+    def __init__(self, sound_path: Path = sound_path) -> None:
+        self.recognizer = DrumGestureRecognizer()
+        self.audio = DrumAudioPlayer(sound_path)
+        self.finger_recognizer = FingerGestureRecognizer()
+        self.finger_audio = FingerAudioPlayer(self.finger_sound_paths)
+
+    def close(self) -> None:
+        self.audio.close()

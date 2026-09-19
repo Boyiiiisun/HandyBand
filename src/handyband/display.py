@@ -5,6 +5,7 @@ import numpy as np
 
 from handyband.models import (
     DrumGestureStatus,
+    FingerGestureStatus,
     ForearmObservation,
     HandLandmark,
     HandObservation,
@@ -44,6 +45,39 @@ TIP_INDICES = {
 }
 
 
+class StyleMenu:
+    """A one-style selector drawn in camera-image coordinates."""
+
+    def __init__(self, style_name: str) -> None:
+        self.style_name = style_name
+        self.expanded = False
+        self._left = 0
+        self._right = 0
+
+    def on_mouse(self, event: int, x: int, y: int, flags: int, param: object) -> None:
+        if event != cv2.EVENT_LBUTTONDOWN:
+            return
+        if self._left <= x < self._right and 10 <= y < 46:
+            self.expanded = not self.expanded
+        else:
+            # Selecting the already-active style or clicking outside closes the list.
+            self.expanded = False
+
+    def draw(self, frame: np.ndarray) -> None:
+        self._right = frame.shape[1] - 10
+        self._left = max(0, self._right - 210)
+        rows = [(10, f"{self.style_name} {'^' if self.expanded else 'v'}")]
+        if self.expanded:
+            rows.append((48, f"{self.style_name} (active)"))
+        for top, label in rows:
+            cv2.rectangle(frame, (self._left, top), (self._right, top + 36), (35, 35, 35), -1)
+            cv2.rectangle(frame, (self._left, top), (self._right, top + 36), (180, 180, 180), 1)
+            cv2.putText(
+                frame, label, (self._left + 10, top + 24),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA,
+            )
+
+
 def _pixel(point: Landmark, width: int, height: int) -> tuple[int, int]:
     x = max(0, min(width - 1, round(point.x * width)))
     y = max(0, min(height - 1, round(point.y * height)))
@@ -56,6 +90,7 @@ def draw_observations(
     forearms: tuple[ForearmObservation, ...],
     fps: float,
     drum_statuses: tuple[DrumGestureStatus, ...] = (),
+    finger_statuses: tuple[FingerGestureStatus, ...] = (),
 ) -> None:
     """Draw hand and forearm observations onto ``frame`` in place."""
 
@@ -89,6 +124,7 @@ def draw_observations(
             cv2.LINE_AA,
         )
 
+    finger_status_by_side = {status.handedness: status for status in finger_statuses}
     for hand_index, hand in enumerate(hands):
         points = [_pixel(point, width, height) for point in hand.landmarks]
         color = (80, 220, 80) if hand.handedness == "Right" else (255, 180, 60)
@@ -117,6 +153,40 @@ def draw_observations(
                 frame,
                 f"{finger.name}: {state}",
                 (panel_x, panel_y + row * 24),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.52,
+                color,
+                1,
+                cv2.LINE_AA,
+            )
+
+        gesture_status = finger_status_by_side.get(hand.handedness)
+        if gesture_status is not None:
+            candidate = gesture_status.candidate_gesture
+            confirmed = gesture_status.confirmed_gesture
+            gesture_label = "--" if candidate is None else str(candidate)
+            cv2.putText(
+                frame,
+                f"Gesture: {gesture_label} | {gesture_status.phase}",
+                (panel_x, panel_y + 6 * 24),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.52,
+                color,
+                1,
+                cv2.LINE_AA,
+            )
+            event = gesture_status.recent_event
+            if event is not None:
+                result = "PLAYED" if event.gesture <= 4 else "NO AUDIO"
+                detail = f"Last: {event.gesture} | {result}"
+            elif confirmed is not None:
+                detail = f"Confirmed: {confirmed}"
+            else:
+                detail = "Last: --"
+            cv2.putText(
+                frame,
+                detail,
+                (panel_x, panel_y + 7 * 24),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.52,
                 color,

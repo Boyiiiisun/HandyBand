@@ -5,9 +5,11 @@ import sys
 import time
 from pathlib import Path
 
+from handyband.styles import Odysseus
+
 DEFAULT_MODEL_PATH = Path("models/hand_landmarker.task")
 DEFAULT_POSE_MODEL_PATH = Path("models/pose_landmarker_lite.task")
-DEFAULT_DRUM_SOUND_PATH = Path("assets/audio/drum.wav")
+DEFAULT_DRUM_SOUND_PATH = Odysseus.sound_path
 WINDOW_TITLE = "HandyBand - Hand Tracking"
 
 
@@ -86,9 +88,7 @@ def run(
 
     import cv2
 
-    from handyband.display import draw_observations
-    from handyband.drum_audio import DrumAudioPlayer
-    from handyband.drum_gesture import DrumGestureRecognizer
+    from handyband.display import StyleMenu, draw_observations
     from handyband.hand_tracking import HandTracker
     from handyband.pose_tracking import PoseTracker
 
@@ -106,11 +106,12 @@ def run(
     previous_frame_at = started_at
     last_timestamp_ms = -1
     smoothed_fps = 0.0
-    drum_recognizer = DrumGestureRecognizer()
-    audio_player = None
+    style = None
+    style_menu = StyleMenu(Odysseus.name)
     try:
-        audio_player = DrumAudioPlayer(drum_sound_path)
+        style = Odysseus(drum_sound_path)
         cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_NORMAL)
+        cv2.setMouseCallback(WINDOW_TITLE, style_menu.on_mouse)
         with (
             HandTracker(
                 model_path,
@@ -143,13 +144,20 @@ def run(
                 last_timestamp_ms = timestamp_ms
                 hands = hand_tracker.detect(rgb_frame, timestamp_ms)
                 forearms = pose_tracker.detect(rgb_frame, timestamp_ms)
-                drum_statuses = drum_recognizer.update(hands, forearms, timestamp_ms)
+                drum_statuses = style.recognizer.update(hands, forearms, timestamp_ms)
+                finger_statuses = style.finger_recognizer.update(hands, timestamp_ms)
                 drum_events = []
                 for status in drum_statuses:
                     event = status.recent_event
                     if event is not None and status.phase == "DRUM_HIT":
                         drum_events.append(event)
-                audio_player.process(tuple(drum_events), timestamp_ms)
+                style.audio.process(tuple(drum_events), timestamp_ms)
+                finger_events = tuple(
+                    status.recent_event
+                    for status in finger_statuses
+                    if status.phase == "TRIGGERED" and status.recent_event is not None
+                )
+                style.finger_audio.process(finger_events)
 
                 now = time.perf_counter()
                 instantaneous_fps = 1.0 / max(now - previous_frame_at, 1e-9)
@@ -160,14 +168,22 @@ def run(
                 )
                 previous_frame_at = now
 
-                draw_observations(frame, hands, forearms, smoothed_fps, drum_statuses)
+                draw_observations(
+                    frame,
+                    hands,
+                    forearms,
+                    smoothed_fps,
+                    drum_statuses,
+                    finger_statuses,
+                )
+                style_menu.draw(frame)
                 cv2.imshow(WINDOW_TITLE, frame)
                 key = cv2.waitKey(1) & 0xFF
                 if key in (ord("q"), ord("Q"), 27) or _window_is_closed(cv2):
                     return 0
     finally:
-        if audio_player is not None:
-            audio_player.close()
+        if style is not None:
+            style.close()
         camera.release()
         cv2.destroyAllWindows()
 

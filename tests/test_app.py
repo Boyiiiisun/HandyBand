@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from handyband.app import (
+    DEFAULT_DRUM_SOUND_PATH,
     DEFAULT_MODEL_PATH,
     DEFAULT_POSE_MODEL_PATH,
     _window_is_closed,
@@ -17,6 +18,11 @@ def test_cli_defaults() -> None:
     assert args.pose_model == DEFAULT_POSE_MODEL_PATH
     assert args.no_mirror is False
     assert args.confidence == 0.5
+
+
+def test_odysseus_default_sound_is_grouped_with_its_style() -> None:
+    assert Path("HandyBand_Audio/Odysseus/drum.wav") == DEFAULT_DRUM_SOUND_PATH
+    assert DEFAULT_DRUM_SOUND_PATH.is_file()
 
 
 def test_missing_model_fails_before_opening_camera(tmp_path: Path, capsys) -> None:
