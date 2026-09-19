@@ -19,6 +19,9 @@ class FingerAudioPlayer:
             import pygame as pygame_module
 
         self._pygame = pygame_module
+        if hasattr(self._pygame.mixer, "get_init") and self._pygame.mixer.get_init() is None:
+            self._pygame.mixer.init(frequency=48_000, size=-16, channels=2, buffer=256)
+            self._pygame.mixer.set_num_channels(16)
         self._sounds = {
             gesture: self._pygame.mixer.Sound(str(path))
             for gesture, path in sound_paths.items()
@@ -34,3 +37,8 @@ class FingerAudioPlayer:
             channel = self._pygame.mixer.find_channel(force=True)
             channel.play(sound)
             channel.set_volume(1.0)
+
+    def close(self) -> None:
+        """Release the audio mixer."""
+
+        self._pygame.mixer.quit()

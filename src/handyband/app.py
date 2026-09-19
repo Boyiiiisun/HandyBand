@@ -5,7 +5,7 @@ import sys
 import time
 from pathlib import Path
 
-from handyband.styles import Odysseus
+from handyband.styles import Odysseus, Piano
 
 DEFAULT_MODEL_PATH = Path("models/hand_landmarker.task")
 DEFAULT_POSE_MODEL_PATH = Path("models/pose_landmarker_lite.task")
@@ -107,7 +107,7 @@ def run(
     last_timestamp_ms = -1
     smoothed_fps = 0.0
     style = None
-    style_menu = StyleMenu(Odysseus.name)
+    style_menu = StyleMenu((Odysseus.name, Piano.name), Odysseus.name)
     try:
         style = Odysseus(drum_sound_path)
         cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_NORMAL)
@@ -144,14 +144,26 @@ def run(
                 last_timestamp_ms = timestamp_ms
                 hands = hand_tracker.detect(rgb_frame, timestamp_ms)
                 forearms = pose_tracker.detect(rgb_frame, timestamp_ms)
-                drum_statuses = style.recognizer.update(hands, forearms, timestamp_ms)
+                if style_menu.style_name != style.name:
+                    style.close()
+                    style = (
+                        Piano()
+                        if style_menu.style_name == Piano.name
+                        else Odysseus(drum_sound_path)
+                    )
+                drum_statuses = (
+                    ()
+                    if style.recognizer is None
+                    else style.recognizer.update(hands, forearms, timestamp_ms)
+                )
                 finger_statuses = style.finger_recognizer.update(hands, timestamp_ms)
                 drum_events = []
                 for status in drum_statuses:
                     event = status.recent_event
                     if event is not None and status.phase == "DRUM_HIT":
                         drum_events.append(event)
-                style.audio.process(tuple(drum_events), timestamp_ms)
+                if style.audio is not None:
+                    style.audio.process(tuple(drum_events), timestamp_ms)
                 finger_events = tuple(
                     status.recent_event
                     for status in finger_statuses
@@ -175,6 +187,7 @@ def run(
                     smoothed_fps,
                     drum_statuses,
                     finger_statuses,
+                    frozenset(style.finger_sound_paths),
                 )
                 style_menu.draw(frame)
                 cv2.imshow(WINDOW_TITLE, frame)

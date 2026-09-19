@@ -26,3 +26,22 @@ class Odysseus:
 
     def close(self) -> None:
         self.audio.close()
+
+
+class Piano:
+    """Numbered finger gestures mapped directly to six piano sounds."""
+
+    name = "Piano"
+    finger_sound_paths = {
+        gesture: Path(f"HandyBand_Audio/Piano/pi_{gesture}.wav")
+        for gesture in range(1, 7)
+    }
+
+    def __init__(self) -> None:
+        self.recognizer = None
+        self.audio = None
+        self.finger_recognizer = FingerGestureRecognizer()
+        self.finger_audio = FingerAudioPlayer(self.finger_sound_paths)
+
+    def close(self) -> None:
+        self.finger_audio.close()

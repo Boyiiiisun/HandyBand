@@ -8,6 +8,7 @@ from handyband.app import (
     build_parser,
     run,
 )
+from handyband.styles import Piano
 
 
 def test_cli_defaults() -> None:
@@ -23,6 +24,14 @@ def test_cli_defaults() -> None:
 def test_odysseus_default_sound_is_grouped_with_its_style() -> None:
     assert Path("HandyBand_Audio/Odysseus/drum.wav") == DEFAULT_DRUM_SOUND_PATH
     assert DEFAULT_DRUM_SOUND_PATH.is_file()
+
+
+def test_piano_maps_gestures_one_through_six_to_matching_audio() -> None:
+    assert Piano.finger_sound_paths == {
+        gesture: Path(f"HandyBand_Audio/Piano/pi_{gesture}.wav")
+        for gesture in range(1, 7)
+    }
+    assert all(path.is_file() for path in Piano.finger_sound_paths.values())
 
 
 def test_missing_model_fails_before_opening_camera(tmp_path: Path, capsys) -> None:

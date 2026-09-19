@@ -50,7 +50,13 @@ def _left_status(
 
 
 def test_open_hand_starts_slow_pose_wrist_downstroke() -> None:
-    recognizer = DrumGestureRecognizer(speed_smoothing=1.0)
+    recognizer = DrumGestureRecognizer(
+        speed_smoothing=1.0,
+        minimum_average_speed=0.75,
+        maximum_volume_speed=12.0,
+        minimum_volume=0.05,
+        maximum_volume=0.50,
+    )
 
     _left_status(recognizer, 0.38, 0, hand=_hand("Left", open_hand=True))
     for timestamp_ms, wrist_y in (
@@ -70,7 +76,13 @@ def test_open_hand_starts_slow_pose_wrist_downstroke() -> None:
 
 
 def test_hand_tracking_may_disappear_after_open_hand_arms_stroke() -> None:
-    recognizer = DrumGestureRecognizer(speed_smoothing=1.0)
+    recognizer = DrumGestureRecognizer(
+        speed_smoothing=1.0,
+        minimum_average_speed=0.75,
+        maximum_volume_speed=12.0,
+        minimum_volume=0.05,
+        maximum_volume=0.50,
+    )
 
     _left_status(recognizer, 0.38, 0, hand=_hand("Left", open_hand=True))
     for timestamp_ms, wrist_y in (
@@ -89,7 +101,13 @@ def test_hand_tracking_may_disappear_after_open_hand_arms_stroke() -> None:
 
 
 def test_higher_speed_downstroke_has_more_volume() -> None:
-    recognizer = DrumGestureRecognizer(speed_smoothing=1.0)
+    recognizer = DrumGestureRecognizer(
+        speed_smoothing=1.0,
+        minimum_average_speed=0.75,
+        maximum_volume_speed=12.0,
+        minimum_volume=0.05,
+        maximum_volume=0.50,
+    )
 
     _left_status(recognizer, 0.38, 0, hand=_hand("Left", open_hand=True))
     _left_status(recognizer, 0.41, 50)
@@ -111,7 +129,7 @@ def test_maximum_reference_speed_reaches_single_hand_volume_cap() -> None:
 
     assert result.recent_event is not None
     assert result.recent_event.speed == pytest.approx(12.0)
-    assert result.recent_event.volume == pytest.approx(0.5)
+    assert result.recent_event.volume == pytest.approx(0.75)
 
 
 def test_folded_hand_does_not_arm_downstroke() -> None:
@@ -137,7 +155,14 @@ def test_rejects_fast_motion_below_minimum_distance() -> None:
 
 
 def test_each_hand_has_independent_500_ms_cooldown() -> None:
-    recognizer = DrumGestureRecognizer(speed_smoothing=1.0, event_display_ms=0)
+    recognizer = DrumGestureRecognizer(
+        speed_smoothing=1.0,
+        event_display_ms=0,
+        minimum_average_speed=0.75,
+        maximum_volume_speed=12.0,
+        minimum_volume=0.05,
+        maximum_volume=0.50,
+    )
 
     _left_status(recognizer, 0.38, 0, hand=_hand("Left", open_hand=True))
     for timestamp_ms, wrist_y in (
@@ -194,7 +219,13 @@ def test_elbow_translation_is_removed_from_downward_speed() -> None:
 
 
 def test_hands_have_independent_events_and_volumes() -> None:
-    recognizer = DrumGestureRecognizer(speed_smoothing=1.0)
+    recognizer = DrumGestureRecognizer(
+        speed_smoothing=1.0,
+        minimum_average_speed=0.75,
+        maximum_volume_speed=12.0,
+        minimum_volume=0.05,
+        maximum_volume=0.50,
+    )
     open_hands = (_hand("Left", open_hand=True), _hand("Right", open_hand=True))
     recognizer.update(
         open_hands,

@@ -46,9 +46,10 @@ TIP_INDICES = {
 
 
 class StyleMenu:
-    """A one-style selector drawn in camera-image coordinates."""
+    """A style selector drawn in camera-image coordinates."""
 
-    def __init__(self, style_name: str) -> None:
+    def __init__(self, style_names: tuple[str, ...], style_name: str) -> None:
+        self.style_names = style_names
         self.style_name = style_name
         self.expanded = False
         self._left = 0
@@ -59,8 +60,12 @@ class StyleMenu:
             return
         if self._left <= x < self._right and 10 <= y < 46:
             self.expanded = not self.expanded
+        elif self.expanded and self._left <= x < self._right:
+            selected_index = (y - 48) // 38
+            if 0 <= selected_index < len(self.style_names):
+                self.style_name = self.style_names[selected_index]
+            self.expanded = False
         else:
-            # Selecting the already-active style or clicking outside closes the list.
             self.expanded = False
 
     def draw(self, frame: np.ndarray) -> None:
@@ -68,7 +73,10 @@ class StyleMenu:
         self._left = max(0, self._right - 210)
         rows = [(10, f"{self.style_name} {'^' if self.expanded else 'v'}")]
         if self.expanded:
-            rows.append((48, f"{self.style_name} (active)"))
+            rows.extend(
+                (48 + index * 38, f"{name}{' (active)' if name == self.style_name else ''}")
+                for index, name in enumerate(self.style_names)
+            )
         for top, label in rows:
             cv2.rectangle(frame, (self._left, top), (self._right, top + 36), (35, 35, 35), -1)
             cv2.rectangle(frame, (self._left, top), (self._right, top + 36), (180, 180, 180), 1)
@@ -91,6 +99,7 @@ def draw_observations(
     fps: float,
     drum_statuses: tuple[DrumGestureStatus, ...] = (),
     finger_statuses: tuple[FingerGestureStatus, ...] = (),
+    mapped_finger_gestures: frozenset[int] = frozenset(range(1, 5)),
 ) -> None:
     """Draw hand and forearm observations onto ``frame`` in place."""
 
@@ -177,7 +186,7 @@ def draw_observations(
             )
             event = gesture_status.recent_event
             if event is not None:
-                result = "PLAYED" if event.gesture <= 4 else "NO AUDIO"
+                result = "PLAYED" if event.gesture in mapped_finger_gestures else "NO AUDIO"
                 detail = f"Last: {event.gesture} | {result}"
             elif confirmed is not None:
                 detail = f"Confirmed: {confirmed}"
