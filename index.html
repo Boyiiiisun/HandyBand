@@ -326,6 +326,8 @@
       .note-slot { display: block; color: var(--ink); font-size: 1.2rem; font-weight: 700; line-height: 1.4; text-align: center; }
       [data-instruction-style="Piano"] .gesture-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       [data-instruction-style="Piano"] .gesture-icon { justify-self: center; }
+      [data-instruction-style="Odysseus"] .note-gesture-list .gesture-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      [data-instruction-style="Odysseus"] .note-gesture-list .gesture-icon { justify-self: center; }
       .piano-heading { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; gap: 8px; width: 100%; max-width: 300px; margin-left: auto; margin-right: auto; text-align: center; }
       .piano-heading span { color: var(--cyan); font-size: .82rem; }
       #left-instructions { grid-column: 1; }
@@ -415,14 +417,15 @@
           <section data-instruction-style="Odysseus">
             <p class="kicker">ODYSSEUS</p>
             <h2>Hand shapes → Oboe</h2>
-            <ul class="gesture-list">
-              <li class="gesture-row"><span class="gesture-number">01</span><img class="gesture-icon" src="./web/gestures/gesture-1.svg" alt="Index extended" width="48" height="58"><span class="gesture-sound">OBOE 01</span></li>
-              <li class="gesture-row"><span class="gesture-number">02</span><img class="gesture-icon" src="./web/gestures/gesture-2.svg" alt="Index and middle extended" width="48" height="58"><span class="gesture-sound">OBOE 02</span></li>
-              <li class="gesture-row"><span class="gesture-number">03</span><img class="gesture-icon" src="./web/gestures/gesture-3.svg" alt="Middle, ring and pinky extended; thumb and index bent" width="48" height="58"><span class="gesture-sound">OBOE 03</span></li>
-              <li class="gesture-row"><span class="gesture-number">04</span><img class="gesture-icon" src="./web/gestures/gesture-4.svg" alt="Index, middle, ring and pinky extended" width="48" height="58"><span class="gesture-sound">OBOE 04</span></li>
-              <li class="gesture-row"><span class="gesture-number">05</span><img class="gesture-icon" src="./web/gestures/gesture-5.svg" alt="All fingers extended" width="48" height="58"><span class="gesture-sound">OBOE 05</span></li>
-              <li class="gesture-row"><span class="gesture-number">06</span><img class="gesture-icon" src="./web/gestures/gesture-6.svg" alt="Thumb and pinky extended" width="48" height="58"><span class="gesture-sound">OBOE 06</span></li>
-              <li class="gesture-row"><span class="gesture-number">07</span><img class="gesture-icon" src="./web/gestures/gesture-7.svg" alt="Thumb and index extended" width="48" height="58"><span class="gesture-sound">OBOE 07</span></li>
+            <!-- Match the Piano note-label presentation for the Oboe samples. -->
+            <ul class="gesture-list note-gesture-list">
+              <li class="gesture-row"><img class="gesture-icon" src="./web/gestures/gesture-1.svg" alt="Index extended" width="48" height="58"><span class="note-slot">G#5</span></li>
+              <li class="gesture-row"><img class="gesture-icon" src="./web/gestures/gesture-2.svg" alt="Index and middle extended" width="48" height="58"><span class="note-slot">D5</span></li>
+              <li class="gesture-row"><img class="gesture-icon" src="./web/gestures/gesture-3.svg" alt="Middle, ring and pinky extended; thumb and index bent" width="48" height="58"><span class="note-slot">G5</span></li>
+              <li class="gesture-row"><img class="gesture-icon" src="./web/gestures/gesture-4.svg" alt="Index, middle, ring and pinky extended" width="48" height="58"><span class="note-slot">C5</span></li>
+              <li class="gesture-row"><img class="gesture-icon" src="./web/gestures/gesture-5.svg" alt="All fingers extended" width="48" height="58"><span class="note-slot">C6</span></li>
+              <li class="gesture-row"><img class="gesture-icon" src="./web/gestures/gesture-6.svg" alt="Thumb and pinky extended" width="48" height="58"><span class="note-slot">D6</span></li>
+              <li class="gesture-row"><img class="gesture-icon" src="./web/gestures/gesture-7.svg" alt="Thumb and index extended" width="48" height="58"><span class="note-slot">D#6</span></li>
             </ul>
             <figure class="drum-guide">
               <img src="./web/gestures/drum-downstroke.svg" alt="A closed fist and forearm swing downward from the faint raised position" width="240" height="150">
