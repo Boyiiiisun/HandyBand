@@ -29,8 +29,8 @@ def test_odysseus_default_sound_is_grouped_with_its_style() -> None:
 
 
 def test_piano_maps_gestures_one_through_six_to_matching_audio() -> None:
-    assert Piano.left_safety_interval_ms == 1500
-    assert Piano.right_safety_interval_ms == 750
+    assert Piano.left_safety_interval_ms == 1640
+    assert Piano.right_safety_interval_ms == 820
     assert Piano.finger_sound_paths == {
         gesture: Path(f"HandyBand_Audio/Piano/pi_{gesture}.wav")
         for gesture in range(1, 7)

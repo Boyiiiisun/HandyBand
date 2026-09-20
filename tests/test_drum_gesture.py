@@ -124,11 +124,11 @@ def test_maximum_reference_speed_reaches_single_hand_volume_cap() -> None:
     recognizer = DrumGestureRecognizer(speed_smoothing=1.0)
 
     _left_status(recognizer, 0.30, 0, hand=_hand("Left", open_hand=True))
-    _left_status(recognizer, 0.42, 50)
-    result = _left_status(recognizer, 0.42, 100)
+    _left_status(recognizer, 0.44, 50)
+    result = _left_status(recognizer, 0.44, 100)
 
     assert result.recent_event is not None
-    assert result.recent_event.speed == pytest.approx(12.0)
+    assert result.recent_event.speed == pytest.approx(14.0)
     assert result.recent_event.volume == pytest.approx(0.75)
 
 

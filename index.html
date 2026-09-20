@@ -68,10 +68,21 @@
         text-transform: uppercase;
       }
 
-      .brand { color: var(--ink); }
+      .brand { margin-right: auto; color: var(--ink); }
       .brand b, .signal { color: var(--cyan); }
       .topbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
       .top-status { color: var(--muted); text-align: right; }
+      .top-sound-control {
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        color: var(--cyan);
+        background: rgba(8, 13, 18, .78);
+        font-size: .65rem;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+      }
+      .top-sound-control:hover, .top-sound-control:focus-visible { border-color: var(--pink); outline: none; box-shadow: 0 0 13px rgba(236, 88, 190, .32); }
       .fullscreen-control {
         padding: 8px 10px;
         border: 1px solid var(--line);
@@ -136,15 +147,7 @@
       }
 
       .monitor::after {
-        position: absolute;
-        right: 18%;
-        bottom: 14px;
-        left: 18%;
-        height: 7px;
-        border-radius: 999px;
-        background: #071015;
-        box-shadow: 0 1px 0 rgba(255,255,255,.12);
-        content: "";
+        content: none;
       }
 
       .screen {
@@ -234,6 +237,49 @@
 
       .pause-overlay:hover, .pause-overlay:focus-visible { border-color: var(--pink); outline: none; }
 
+      .channel-bank {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: clamp(7px, 1.2vw, 13px);
+        min-height: 34px;
+        margin-top: clamp(12px, 1.6vw, 18px);
+      }
+
+      .channel-button {
+        width: clamp(31px, 3.1vw, 42px);
+        height: clamp(23px, 2.4vw, 30px);
+        border: 1px solid #65777d;
+        border-radius: 4px;
+        color: #b9c9cd;
+        background: linear-gradient(145deg, #34454a, #10191e);
+        box-shadow: inset 0 1px 1px rgba(255,255,255,.16), 0 2px 0 #05090c;
+        font-family: inherit;
+        font-size: .58rem;
+        font-weight: 700;
+        letter-spacing: .04em;
+      }
+
+      .channel-button:hover, .channel-button:focus-visible, .channel-button[aria-pressed="true"] {
+        border-color: var(--cyan);
+        color: var(--cyan);
+        outline: none;
+        box-shadow: 0 0 10px rgba(98, 232, 238, .46), inset 0 1px 1px rgba(255,255,255,.16);
+      }
+
+      .channel-button[aria-pressed="true"] { transform: translateY(1px); background: #07161c; }
+      .channel-button:disabled { cursor: default; opacity: .38; }
+
+      .gesture-prompt {
+        margin: 0 !important;
+        color: var(--cyan) !important;
+        font-size: .9rem !important;
+        font-weight: 700;
+        letter-spacing: .05em;
+        line-height: 1.7 !important;
+        text-align: center;
+      }
+
       .monitor-foot {
         display: flex;
         align-items: center;
@@ -292,9 +338,9 @@
   <body>
     <main id="stage" class="stage" aria-label="HandyBand gesture music workspace">
       <header class="topbar">
-        <div class="brand">HANDY<span>BAND</span> / <b>GESTURE MUSIC</b></div>
+        <button id="camera-button" class="top-sound-control" type="button">◖ SOUND OFF</button>
         <div class="topbar-actions">
-          <div id="model-status" class="top-status">INITIALIZING LOCAL TRACKING</div>
+          <div id="model-status" class="hidden" aria-live="polite"></div>
           <button id="fullscreen-button" class="fullscreen-control" type="button">⌜ FULLSCREEN</button>
         </div>
       </header>
@@ -303,9 +349,7 @@
         <aside class="info-panel" aria-labelledby="gesture-heading">
           <p class="kicker">01 / INPUT</p>
           <h1 id="gesture-heading">PLAY WITH YOUR HANDS</h1>
-          <p>Keep your palm visible and facing the screen. Hold a numbered shape briefly to trigger a sound.</p>
-          <p id="gesture-state" class="live-state" aria-live="polite">WAITING FOR CAMERA</p>
-          <button id="retry-camera" class="control" type="button"><small>↻</small> RETRY CAMERA</button>
+          <p id="gesture-state" class="hidden" aria-live="polite"></p>
         </aside>
 
         <section class="monitor-stack" aria-label="Live camera and hand tracking">
@@ -317,19 +361,20 @@
               <p id="camera-status" class="camera-status">STARTING CAMERA…</p>
               <button id="pause-overlay" class="pause-overlay hidden" type="button">PAUSED — TAP TO RESUME</button>
             </div>
+            <div class="channel-bank" aria-label="Television channel controls">
+              <button class="channel-button" type="button" data-channel="Odysseus" aria-pressed="true" aria-label="Odysseus"></button>
+              <button class="channel-button" type="button" data-channel="Piano" aria-pressed="false" aria-label="Piano"></button>
+              <button class="channel-button" type="button" disabled aria-label="Unavailable"></button>
+              <button class="channel-button" type="button" disabled aria-label="Unavailable"></button>
+            </div>
           </div>
-          <div class="monitor-foot"><span class="power">LIVE INPUT</span><span>HANDYBAND / 01</span></div>
+          <div class="monitor-foot"><span class="power">LIVE INPUT</span><span id="channel-readout">ODYSSEUS</span></div>
         </section>
 
-        <aside class="info-panel" aria-labelledby="sound-heading">
-          <p class="kicker">02 / OUTPUT</p>
-          <h2 id="sound-heading">SELECT A SOUND PROGRAM</h2>
-          <div class="control-list">
-            <label class="label" for="style">INSTRUMENT</label>
-            <select id="style" aria-label="Music style"><option>Odysseus</option><option>Piano</option></select>
-            <button id="camera-button" class="control sound-control" type="button"><small>▮▮</small> SOUND ON</button>
-          </div>
-          <p id="style-note" class="meta">ODYSSEUS: 75S REARM PER HAND, PLUS OPEN-HAND DRUM STROKES.</p>
+        <aside class="info-panel" aria-label="Gesture instructions">
+          <p class="gesture-prompt">Try showing 1, 2, 3, 4…</p>
+          <select id="style" class="hidden" aria-label="Music style"><option>Odysseus</option><option>Piano</option></select>
+          <span id="style-note" class="hidden"></span>
         </aside>
       </section>
     </main>

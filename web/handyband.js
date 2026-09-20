@@ -34,10 +34,11 @@ const HAND_CONNECTIONS = [
 const page = {
   stage: document.querySelector("#stage"),
   cameraButton: document.querySelector("#camera-button"),
-  retryButton: document.querySelector("#retry-camera"),
   cameraScreen: document.querySelector("#camera-screen"),
   pauseOverlay: document.querySelector("#pause-overlay"),
   fullscreenButton: document.querySelector("#fullscreen-button"),
+  channelButtons: document.querySelectorAll("[data-channel]"),
+  channelReadout: document.querySelector("#channel-readout"),
   camera: document.querySelector("#camera"),
   overlay: document.querySelector("#landmark-overlay"),
   placeholder: document.querySelector("#camera-placeholder"),
@@ -101,6 +102,10 @@ class AudioBank {
     return this.loading;
   }
 
+  async suspend() {
+    if (this.context?.state === "running") await this.context.suspend();
+  }
+
   async loadAll() {
     const entries = [
       ["drum", audioPaths.drum],
@@ -119,7 +124,7 @@ class AudioBank {
 
   play(key, volume = 1) {
     const buffer = this.buffers.get(key);
-    if (!buffer || !this.context) return false;
+    if (!buffer || this.context?.state !== "running") return false;
     const source = this.context.createBufferSource();
     const gain = this.context.createGain();
     source.buffer = buffer;
@@ -164,8 +169,6 @@ async function initializeModels() {
 }
 
 async function startSession() {
-  state.audio.unlock().catch(() => {});
-
   if (!navigator.mediaDevices?.getUserMedia) {
     page.cameraStatus.textContent = "Camera preview is unavailable in this browser";
     return;
@@ -182,7 +185,6 @@ async function startSession() {
     state.paused = false;
     page.pauseOverlay.classList.add("hidden");
     page.placeholder.classList.add("hidden");
-    page.cameraButton.textContent = "Camera enabled";
     page.cameraStatus.textContent = "Loading gesture models…";
     await initializeModels();
     state.running = true;
@@ -555,7 +557,6 @@ function resetRecognizers() {
   state.pendingDrum = null;
 }
 
-page.retryButton.addEventListener("click", startSession);
 page.cameraScreen.addEventListener("click", (event) => {
   if (!event.target.closest("button")) toggleTracking();
 });
@@ -572,7 +573,13 @@ page.pauseOverlay.addEventListener("click", (event) => {
 page.fullscreenButton.addEventListener("click", toggleFullscreen);
 document.addEventListener("fullscreenchange", updateFullscreenLabel);
 document.addEventListener("webkitfullscreenchange", updateFullscreenLabel);
-page.cameraButton.addEventListener("click", async () => {
+async function toggleSound() {
+  if (state.audio.context?.state === "running") {
+    await state.audio.suspend();
+    page.cameraButton.textContent = "SOUND OFF";
+    page.modelStatus.textContent = "TRACKING ACTIVE · SOUND OFF";
+    return;
+  }
   try {
     await state.audio.unlock();
     page.cameraButton.textContent = "SOUND ON";
@@ -582,7 +589,7 @@ page.cameraButton.addEventListener("click", async () => {
     page.modelStatus.textContent = "AUDIO COULD NOT BE ENABLED";
     console.error("HandyBand audio could not start.", error);
   }
-});
+}
 page.style.addEventListener("change", () => {
   resetRecognizers();
   page.styleNote.textContent = page.style.value === "Piano"
@@ -591,7 +598,27 @@ page.style.addEventListener("change", () => {
   page.gestureState.textContent = page.style.value === "Piano"
     ? "Show a numbered hand shape and hold it briefly"
     : "Open your hand, then make a downward drum stroke";
+  updateChannelControls();
 });
+
+function selectChannel(style) {
+  if (page.style.value === style) return;
+  page.style.value = style;
+  page.style.dispatchEvent(new Event("change"));
+}
+
+function updateChannelControls() {
+  page.channelReadout.textContent = page.style.value.toUpperCase();
+  page.channelButtons.forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.channel === page.style.value));
+  });
+}
+
+page.cameraButton.addEventListener("click", toggleSound);
+page.channelButtons.forEach((button) => {
+  button.addEventListener("click", () => selectChannel(button.dataset.channel));
+});
+updateChannelControls();
 window.addEventListener("pagehide", () => {
   stopCamera();
   state.handLandmarker?.close();
