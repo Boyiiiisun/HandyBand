@@ -32,6 +32,9 @@ const page = {
   stage: document.querySelector("#stage"),
   cameraButton: document.querySelector("#camera-button"),
   retryButton: document.querySelector("#retry-camera"),
+  cameraScreen: document.querySelector("#camera-screen"),
+  pauseOverlay: document.querySelector("#pause-overlay"),
+  fullscreenButton: document.querySelector("#fullscreen-button"),
   camera: document.querySelector("#camera"),
   overlay: document.querySelector("#landmark-overlay"),
   placeholder: document.querySelector("#camera-placeholder"),
@@ -65,6 +68,7 @@ const state = {
   poseLandmarker: null,
   modelsPromise: null,
   running: false,
+  paused: false,
   animationFrame: null,
   lastVideoTime: -1,
   fingerStates: new Map(["Left", "Right"].map((side) => [side, newFingerState()])),
@@ -172,6 +176,8 @@ async function startSession() {
     });
     page.camera.srcObject = state.stream;
     await page.camera.play();
+    state.paused = false;
+    page.pauseOverlay.classList.add("hidden");
     page.placeholder.classList.add("hidden");
     page.cameraButton.textContent = "Camera enabled";
     page.cameraStatus.textContent = "Loading gesture models…";
@@ -192,6 +198,7 @@ async function startSession() {
 
 function stopCamera() {
   state.running = false;
+  state.paused = false;
   if (state.animationFrame) cancelAnimationFrame(state.animationFrame);
   state.animationFrame = null;
   state.lastVideoTime = -1;
@@ -203,7 +210,7 @@ function stopCamera() {
 
 function processFrame(timestamp) {
   state.animationFrame = null;
-  if (!state.running) return;
+  if (!state.running || state.paused) return;
   if (page.camera.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && page.camera.currentTime !== state.lastVideoTime) {
     state.lastVideoTime = page.camera.currentTime;
     const handResult = state.handLandmarker.detectForVideo(page.camera, timestamp);
@@ -223,6 +230,56 @@ function processFrame(timestamp) {
     updateLiveText(fingerStatuses, drumStatuses);
   }
   state.animationFrame = requestAnimationFrame(processFrame);
+}
+
+function pauseTracking() {
+  if (!state.running || state.paused) return;
+  state.paused = true;
+  if (state.animationFrame) cancelAnimationFrame(state.animationFrame);
+  state.animationFrame = null;
+  state.pendingDrum = null;
+  page.pauseOverlay.classList.remove("hidden");
+  page.cameraStatus.textContent = "Tracking paused";
+  page.gestureState.textContent = "PAUSED — TAP THE SCREEN TO RESUME";
+}
+
+function resumeTracking() {
+  if (!state.running || !state.paused) return;
+  state.paused = false;
+  page.pauseOverlay.classList.add("hidden");
+  page.cameraStatus.textContent = "Camera on · show a gesture";
+  page.gestureState.textContent = "TRACKING RESUMED";
+  state.animationFrame ??= requestAnimationFrame(processFrame);
+}
+
+function toggleTracking() {
+  if (state.paused) resumeTracking();
+  else pauseTracking();
+}
+
+async function toggleFullscreen() {
+  try {
+    const active = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!active) {
+      const request = document.documentElement.requestFullscreen
+        || document.documentElement.webkitRequestFullscreen;
+      if (!request) throw new Error("Fullscreen API is not supported");
+      await request.call(document.documentElement);
+    } else {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (!exit) throw new Error("Fullscreen API is not supported");
+      await exit.call(document);
+    }
+  } catch (error) {
+    page.modelStatus.textContent = "FULLSCREEN IS NOT AVAILABLE IN THIS BROWSER";
+    console.warn("Fullscreen mode is unavailable.", error);
+  }
+}
+
+function updateFullscreenLabel() {
+  page.fullscreenButton.textContent = document.fullscreenElement || document.webkitFullscreenElement
+    ? "⌟ EXIT FULLSCREEN"
+    : "⌜ FULLSCREEN";
 }
 
 function observationsFrom(result) {
@@ -492,6 +549,22 @@ function resetRecognizers() {
 }
 
 page.retryButton.addEventListener("click", startSession);
+page.cameraScreen.addEventListener("click", (event) => {
+  if (!event.target.closest("button")) toggleTracking();
+});
+page.cameraScreen.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    toggleTracking();
+  }
+});
+page.pauseOverlay.addEventListener("click", (event) => {
+  event.stopPropagation();
+  resumeTracking();
+});
+page.fullscreenButton.addEventListener("click", toggleFullscreen);
+document.addEventListener("fullscreenchange", updateFullscreenLabel);
+document.addEventListener("webkitfullscreenchange", updateFullscreenLabel);
 page.cameraButton.addEventListener("click", async () => {
   try {
     await state.audio.unlock();

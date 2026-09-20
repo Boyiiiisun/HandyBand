@@ -4,6 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#080b12" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>HandyBand — Gesture Music</title>
     <style>
       :root {
@@ -68,11 +70,23 @@
 
       .brand { color: var(--ink); }
       .brand b, .signal { color: var(--cyan); }
+      .topbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
       .top-status { color: var(--muted); text-align: right; }
+      .fullscreen-control {
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        color: var(--cyan);
+        background: rgba(8, 13, 18, .78);
+        font-size: .65rem;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+      }
+      .fullscreen-control:hover, .fullscreen-control:focus-visible { border-color: var(--pink); outline: none; box-shadow: 0 0 13px rgba(236, 88, 190, .32); }
 
       .workbench {
         display: grid;
-        grid-template-columns: minmax(170px, .8fr) minmax(440px, 2.2fr) minmax(190px, .9fr);
+        grid-template-columns: minmax(145px, .55fr) minmax(560px, 3.25fr) minmax(155px, .55fr);
         align-items: center;
         gap: clamp(24px, 4vw, 72px);
         min-height: calc(100vh - 140px);
@@ -111,7 +125,7 @@
       .info-panel p:not(.kicker):not(.label) { margin-bottom: 0; color: #c1cbd0; font-size: .75rem; line-height: 1.72; }
       .live-state { margin-top: 16px !important; color: var(--cyan) !important; font-weight: 700; }
 
-      .monitor-stack { min-width: 0; }
+      .monitor-stack { width: 100%; min-width: 0; }
       .monitor {
         position: relative;
         padding: clamp(18px, 2.4vw, 32px) clamp(18px, 2.4vw, 30px) clamp(32px, 4vw, 52px);
@@ -141,7 +155,10 @@
         border-radius: 9% / 7%;
         background: #03070b;
         box-shadow: inset 0 0 0 2px #35464b, inset 0 0 35px #000;
+        cursor: pointer;
       }
+
+      .screen:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
 
       #camera, #landmark-overlay {
         position: absolute;
@@ -197,6 +214,26 @@
         text-transform: uppercase;
       }
 
+      .pause-overlay {
+        position: absolute;
+        z-index: 5;
+        top: 50%;
+        left: 50%;
+        min-width: min(76%, 230px);
+        padding: 14px 18px;
+        border: 1px solid var(--cyan);
+        color: var(--ink);
+        background: rgba(3, 7, 11, .88);
+        box-shadow: 0 0 24px rgba(98, 232, 238, .32);
+        font-size: .72rem;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        transform: translate(-50%, -50%);
+      }
+
+      .pause-overlay:hover, .pause-overlay:focus-visible { border-color: var(--pink); outline: none; }
+
       .monitor-foot {
         display: flex;
         align-items: center;
@@ -233,6 +270,9 @@
       .control small { color: var(--pink); }
       .meta { margin-top: 17px !important; color: var(--muted) !important; font-size: .64rem !important; }
 
+      :fullscreen { background: var(--black); }
+      :fullscreen .stage { width: min(100%, 1800px); }
+
       @media (max-width: 900px) {
         .workbench { grid-template-columns: 1fr; gap: 25px; padding-top: 44px; }
         .monitor-stack { order: -1; width: min(100%, 720px); margin: 0 auto; }
@@ -242,6 +282,7 @@
       @media (max-width: 520px) {
         .stage { padding: 22px 16px; }
         .topbar { align-items: flex-start; flex-direction: column; }
+        .topbar-actions { align-items: flex-start; flex-direction: column; }
         .top-status { text-align: left; }
         .monitor { padding: 14px 14px 38px; border-radius: 13px 13px 20px 20px; }
         .screen { border-width: 6px; }
@@ -252,7 +293,10 @@
     <main id="stage" class="stage" aria-label="HandyBand gesture music workspace">
       <header class="topbar">
         <div class="brand">HANDY<span>BAND</span> / <b>GESTURE MUSIC</b></div>
-        <div id="model-status" class="top-status">INITIALIZING LOCAL TRACKING</div>
+        <div class="topbar-actions">
+          <div id="model-status" class="top-status">INITIALIZING LOCAL TRACKING</div>
+          <button id="fullscreen-button" class="fullscreen-control" type="button">⌜ FULLSCREEN</button>
+        </div>
       </header>
 
       <section class="workbench">
@@ -266,11 +310,12 @@
 
         <section class="monitor-stack" aria-label="Live camera and hand tracking">
           <div class="monitor">
-            <div class="screen">
+            <div id="camera-screen" class="screen" tabindex="0" aria-label="Camera tracking display. Tap to pause or resume tracking.">
               <video id="camera" autoplay muted playsinline></video>
               <canvas id="landmark-overlay" aria-hidden="true"></canvas>
               <div id="camera-placeholder" class="camera-placeholder"><strong>CAMERA STANDBY</strong>Allow camera access to begin gesture tracking.</div>
               <p id="camera-status" class="camera-status">STARTING CAMERA…</p>
+              <button id="pause-overlay" class="pause-overlay hidden" type="button">PAUSED — TAP TO RESUME</button>
             </div>
           </div>
           <div class="monitor-foot"><span class="power">LIVE INPUT</span><span>HANDYBAND / 01</span></div>
