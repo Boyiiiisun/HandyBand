@@ -36,7 +36,7 @@ const FINGER_JOINTS = {
 };
 const GESTURE_PATTERNS = new Map([
   ["00000", 0], ["01000", 1], ["01100", 2], ["00111", 3],
-  ["01111", 4], ["11111", 5], ["10001", 6], ["11000", 7],
+  ["01110", 3], ["01111", 4], ["11111", 5], ["10001", 6], ["11000", 7],
 ]);
 const HAND_CONNECTIONS = [
   [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8],
@@ -90,7 +90,6 @@ const state = {
   lastVideoTime: -1,
   fingerStates: new Map(["Left", "Right"].map((side) => [side, newFingerState()])),
   drumStates: new Map(["Left", "Right"].map((side) => [side, newDrumState()])),
-  pendingDrum: null,
   latestFingerStatuses: [],
   latestDrumStatuses: [],
 };
@@ -246,7 +245,7 @@ function processFrame(timestamp) {
     state.latestFingerStatuses = fingerStatuses;
     state.latestDrumStatuses = drumStatuses;
     playFingerEvents(fingerStatuses);
-    playDrumEvents(drumStatuses.flatMap((status) => status.event ? [status.event] : []), motionTimestamp);
+    playDrumEvents(drumStatuses.flatMap((status) => status.event ? [status.event] : []));
     drawLandmarks(hands);
     updateLiveText(fingerStatuses, drumStatuses);
   }
@@ -258,7 +257,6 @@ function pauseTracking() {
   state.paused = true;
   if (state.animationFrame) cancelAnimationFrame(state.animationFrame);
   state.animationFrame = null;
-  state.pendingDrum = null;
   page.pauseOverlay.classList.remove("hidden");
   page.cameraStatus.textContent = "Tracking paused";
   page.gestureState.textContent = "PAUSED — TAP THE SCREEN TO RESUME";
@@ -492,30 +490,10 @@ function playFingerEvents(statuses) {
   }
 }
 
-function playDrumEvents(events, timestamp) {
-  const remaining = [...events];
-  if (state.pendingDrum) {
-    const partnerIndex = remaining.findIndex((event) => event.handedness !== state.pendingDrum.handedness
-      && event.timestamp - state.pendingDrum.timestamp <= 80);
-    if (partnerIndex >= 0) {
-      const partner = remaining.splice(partnerIndex, 1)[0];
-      state.audio.play("drum", Math.min(1, state.pendingDrum.volume + partner.volume));
-      state.pendingDrum = null;
-    } else if (timestamp - state.pendingDrum.timestamp >= 80) {
-      state.audio.play("drum", state.pendingDrum.volume);
-      state.pendingDrum = null;
-    }
-  }
-  for (const event of remaining) {
-    if (!state.pendingDrum) state.pendingDrum = event;
-    else if (event.handedness !== state.pendingDrum.handedness) {
-      state.audio.play("drum", Math.min(1, event.volume + state.pendingDrum.volume));
-      state.pendingDrum = null;
-    } else {
-      state.audio.play("drum", state.pendingDrum.volume);
-      state.pendingDrum = event;
-    }
-  }
+function playDrumEvents(events) {
+  if (!events.length) return;
+  const volume = Math.min(1, events.reduce((sum, event) => sum + event.volume, 0));
+  state.audio.play("drum", volume);
 }
 
 function updateLiveText(fingerStatuses, drumStatuses) {
@@ -573,7 +551,6 @@ function clearOverlay() {
 function resetRecognizers() {
   state.fingerStates = new Map(["Left", "Right"].map((side) => [side, newFingerState()]));
   state.drumStates = new Map(["Left", "Right"].map((side) => [side, newDrumState()]));
-  state.pendingDrum = null;
 }
 
 page.cameraScreen.addEventListener("click", (event) => {

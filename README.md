@@ -1,122 +1,121 @@
 # HandyBand
 
-HandyBand is a gesture-controlled music platform that lets one person perform like a full band by using intuitive hand movements to control different instruments and sounds in real time.
+**Your hands. Your rhythm. Your band.**
 
-https://boyiiiisun.github.io/HandyBand/
+Turn everyday hand movements into music. HandyBand uses a camera to track your hands and forearms, recognize deliberate gestures, and play recorded sounds in real time. Shape a phrase with your fingers, add a beat with a downward arm stroke, or combine both hands into a piano performance.
 
-## Windows app (no Python required)
+![HandyBand: hand shapes become musical phrases, and arm strokes become rhythm.](docs/images/handyband-cover.png)
 
-Download **HandyBand-v1.0.1-windows-x64.zip** from
-[GitHub Releases](https://github.com/Boyiiiisun/HandyBand/releases/tag/v1.0.1).
-Extract the entire archive and double-click **HandyBand.exe** in the HandyBand
-folder. Keep its companion files and folders together. Requires 64-bit Windows,
-a webcam and audio output. Python, dependencies, models and published audio are
-included. The app is unsigned.
+**[Play in your browser](https://boyiiiisun.github.io/HandyBand/)** · **[Download for Windows](https://github.com/Boyiiiisun/HandyBand/releases/tag/v1.0.1)** · **[Development guide](docs/development.md)**
 
-## Run from source with one click (Windows)
+No wearable sensors or MIDI controller required: just a camera, audio output, and room to move. This guide focuses on two musical styles: **Odysseus** and **Piano**.
 
-Clone or download this repository, then double-click **Start HandyBand.cmd**.
-The first launch requires internet: it installs a local copy of uv, obtains
-Python 3.12 if needed, creates `.venv`, installs the locked dependencies and
-downloads checksum-verified models. Later launches reuse these files.
-After `git pull`, double-click the same launcher to refresh and run.
+## From movement to music
 
-Optional camera selection: `"Start HandyBand.cmd" --camera 1` from Command Prompt.
-
-## Manual Python setup
-
-HandyBand requires Python 3.12, a webcam, and an audio output device. Run all
-commands from the repository root so the bundled audio files can be found.
-
-```powershell
-git clone https://github.com/Boyiiiisun/HandyBand.git
-cd HandyBand
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -e .
-python scripts/download_models.py
-python -m handyband
+```text
+Camera frames → Hand / arm landmarks → Gesture recognition → Recorded audio
 ```
 
-If the repository is already cloned, update and refresh the environment with:
+HandyBand combines MediaPipe landmark detection with geometric gesture rules. The model locates the hands and joints; the application decides which hand shape or arm movement should trigger a sound. It plays a curated set of audio clips rather than synthesizing arbitrary notes from hand position.
 
-```powershell
-git pull
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e .
-python scripts/download_models.py
-python -m handyband
-```
+![Tracking diagram: all 21 hand landmarks, grouped by finger, alongside elbow and wrist anchors used to detect a downward drum stroke.](docs/images/tracking-guide.png)
 
-Use the menu in the upper-right corner of the camera window to switch music
-styles. Press `Q`, `Esc`, or close the window to exit. If the default camera is
-not available, try `python -m handyband --camera 1`.
+### Read the hand
 
-## Interstellar guided performance
+Up to **two hands** are tracked, with **21 landmarks per hand**: one wrist point and four points along each finger. The colored chains in the diagram connect the joints; points **4, 8, 12, 16, and 20** are the fingertips.
 
-Select **Interstellar** in the camera window's style menu, or start directly:
+For each finger, HandyBand checks two joint angles and whether the fingertip extends farther from the wrist than its first tested joint. The resulting five extended/bent states form a numbered hand shape. A shape must remain stable for **150 ms** before it can trigger an event. Each hand has its own recognition and retrigger timing.
 
-```powershell
-python -m handyband --style Interstellar
-```
+### Read the rhythm
 
-Follow the pictured hand shape with your selected hand (palm toward the camera).
-The next two cards preview upcoming shapes. Hold the current shape until its
-duration bar ends. One successful card plays one musical unit; the lower
-accompaniment runs independently. Missing a card never auto-plays its melody.
+In Odysseus, a separate pose tracker supplies **elbow and wrist anchors**. HandyBand measures downward wrist motion relative to the elbow, normalizes it by forearm length, and smooths the estimated speed. A stroke must travel far enough and finish with sufficient average speed to become a drum hit; small movements are filtered out.
 
-| Key | Action |
-| --- | --- |
-| Space | Start / pause / resume; replay after finishing |
-| T | Learn each hand shape, with sound |
-| P | Practice the selected phrase; waits for the correct shape |
-| E | Perform the full excerpt on a continuous timeline |
-| L / R | Select the anatomical left / right hand and reset |
-| B / N | Previous / next practice phrase |
-| A | Practice the first missed or prematurely released phrase |
-| Q / Esc | Exit |
+The hit fires as the downstroke slows. Faster accepted strokes produce louder hits within a bounded volume range, followed by a **500 ms cooldown per arm**. The drum gesture does **not** require a particular finger shape, so rhythm and hand-shape control can be combined.
 
-Every start/resume has a four-beat visual count-in. Hold a shape steadily for
-150 ms to confirm it. You can prepare early; performance allows 200 ms late.
-Adjacent identical cards require a brief relaxation (100 ms) and re-formation.
-Short tracking flicker is tolerated; after 350 ms without the selected hand,
-both timeline and sound pause. Show your hand again for a recovery count-in.
-Manual pauses require Space to resume.
+*The illustrations show tracking geometry, not screenshots or measured motion traces. Hand and pose landmark numbers belong to separate models; the forearm midpoint is derived from the elbow and wrist.*
 
-The locally downloaded Cornfield Chase MIDI and prepared score are excluded
-from Git. A fresh clone shows a clearly marked gesture exercise until a score is
-imported. See [music sources, cutoff and import commands](HandyBand_Audio/Interstellar/README.md).
+## Two ways to play
 
-## Development checks
+| | Odysseus | Piano |
+| --- | --- | --- |
+| Musical idea | Layer oboe clips and a drum beat | Combine two banks of piano clips |
+| Hand shapes | 1–7 | 1–6 |
+| Left / right hand | Same seven clips, independently triggered | Six distinct clips for each hand |
+| Arm movement | Downstroke triggers the drum | No arm gesture required |
+| Holding the same shape | Retriggers after 75 s per hand | Retriggers after 1.64 s on the left; 0.82 s on the right |
 
-With uv installed, use `uv sync --locked --extra dev`, then `uv run pytest`
-and `uv run ruff check .`. The committed `uv.lock` pins dependencies.
+### Odysseus — shape the phrase, strike the beat
 
-Install the development dependencies and run the checks from the repository
-root:
+Odysseus pairs seven prerecorded oboe clips with a drum sample. Either hand selects a clip through its numbered shape; either arm can add percussion with a deliberate downward stroke. The two controls let you switch musical phrases while maintaining a physical rhythm.
 
-```powershell
-python -m pip install -e ".[dev]"
-python -m pytest
-python -m ruff check .
-```
+**Try it:** show gesture **1** and hold it briefly to start a clip. Change to **2** to select another, then lower your forearm in a clear drum stroke and let it settle. Repeat with a faster stroke to hear the change in drum volume. Keep both the elbow and wrist in the camera frame.
 
-## Build the Windows app
+Both hands use the same numbered sound bank, but trigger independently. The 75-second interval limits repeated triggering while a shape is held; changing to a different recognized shape can trigger after its own 150 ms confirmation, without waiting 75 seconds.
 
-On Windows with uv and Git installed:
+### Piano — give each hand a part
 
-```powershell
-uv sync --locked --extra build
-uv run --locked python scripts/build_windows.py
-```
+Piano maps six hand shapes to six piano clips **for each hand**. Your anatomical left hand selects the left bank, and your right hand selects the right bank, giving you twelve mapped clips across two independently controlled parts. No downstroke is needed.
 
-The portable folder is `dist/HandyBand`. The build runs `HandyBand.exe --self-test`
-from outside the project directory to verify bundled model inference and all
-styles with dummy audio; this does not test physical camera or speaker hardware.
-Pushing a version tag runs the Windows release workflow, tests and packages the
-app, then publishes the ZIP and SHA-256 checksum to GitHub Releases.
+**Try it:** hold gesture **1** with your left hand, then add gesture **2** with your right. Change one hand at a time to explore how the two banks fit together. Keep a shape steady to repeat its clip at that hand's retrigger interval, or change shape to select a new clip after confirmation.
+
+The left hand retriggers more slowly than the right: **1.64 s versus 0.82 s**. These are trigger intervals, not a tempo-synchronization system. Each clip starts from its beginning when triggered.
+
+### Hand-shape reference
+
+Use these specific shapes with either hand. **The numbers are gesture labels, not simply a count of extended fingers.** For each shape, extend the listed fingers and bend the others.
+
+![Eight hand-shape diagrams: 0 closed fist; 1 index; 2 index and middle; 3 middle, ring and pinky; 4 all except thumb; 5 all fingers; 6 thumb and pinky; 7 thumb and index.](docs/images/gesture-reference.png)
+
+| Shape | Extended fingers | Odysseus | Piano |
+| --- | --- | --- | --- |
+| 0 | None — closed fist | No finger clip | No finger clip |
+| 1 | Index | Clip 1 | Left / right clip 1 |
+| 2 | Index, middle | Clip 2 | Left / right clip 2 |
+| 3 | Middle, ring, pinky | Clip 3 | Left / right clip 3 |
+| 4 | Index, middle, ring, pinky | Clip 4 | Left / right clip 4 |
+| 5 | Thumb, index, middle, ring, pinky | Clip 5 | Left / right clip 5 |
+| 6 | Thumb, pinky | Clip 6 | Left / right clip 6 |
+| 7 | Thumb, index | Clip 7 | No mapped sound |
+
+The illustrated shapes work in both implementations. The desktop recognizer also accepts **index + middle + ring** as an alternative for gesture 3; the browser uses the illustrated **middle + ring + pinky** shape.
+
+**Playback behavior:** browser clips can overlap and continue playing when you change shape or close your hand. On desktop, switching to another recognized shape fades out that hand's previous clips over 150 ms; a closed fist starts no replacement clip. A closed fist does not disable arm-triggered drums. Moving a hand out of view is not a universal stop command. In the browser, click **SOUND ON** to mute; the label changes to **SOUND OFF**.
+
+## Start playing
+
+### In your browser
+
+1. Open **[HandyBand](https://boyiiiisun.github.io/HandyBand/)** and allow camera access. Wait for the camera and tracking models to load.
+2. Click **SOUND OFF** to enable sound; the control changes to **SOUND ON**.
+3. Use the first two channel buttons below the camera to choose **Odysseus** or **Piano**. The label below the screen shows the selected style.
+4. Show one or both hands and hold a reference shape briefly. For Odysseus percussion, include your elbows and wrists in the frame.
+
+Click or tap the camera display to pause tracking, then tap the pause overlay to resume. Pausing tracking stops new gesture processing; already-started audio can continue. Use the sound control to mute and **FULLSCREEN** to enlarge the workspace.
+
+The browser version needs internet access to load its libraries, models, and audio. Camera access requires a secure context; use the hosted HTTPS page or localhost when developing. Model inference runs in the browser, and the current application does not send camera frames to a server. The camera request does not include microphone access.
+
+### Windows app
+
+Download **HandyBand-v1.0.1-windows-x64.zip** from [GitHub Releases](https://github.com/Boyiiiisun/HandyBand/releases/tag/v1.0.1), extract the entire archive, and double-click **HandyBand.exe**. Keep its companion files and folders together.
+
+The portable app includes Python, dependencies, models, and published audio. It requires 64-bit Windows, a webcam, and audio output; no separate Python installation is needed. The app is unsigned. Select **Odysseus** or **Piano** from the menu in the camera window's upper-right corner. Press **Q** or **Esc**, or close the window, to exit.
+
+### From source
+
+On Windows, clone or download this repository and double-click **Start HandyBand.cmd**. The first launch installs the local runtime and locked dependencies and downloads the models; internet access is required. Later launches reuse these files. After updating the repository, run the same launcher again.
+
+For a different camera, run `"Start HandyBand.cmd" --camera 1` from Command Prompt. For manual setup, local web serving, testing, and packaging, see the **[development guide](docs/development.md)**.
+
+### Help the camera see you
+
+- Use even lighting and keep your hands separated and fully visible.
+- Start with your palms toward the camera and clear, deliberate finger shapes.
+- Hold each new shape briefly instead of moving continuously between shapes.
+- For drums, leave room for the elbow and wrist to remain visible throughout the stroke.
+
+Occlusion, strong perspective, motion blur, and low frame rates can affect recognition. The hand-shape rules are geometric heuristics, so a partially bent finger may be interpreted differently from what you intended.
+
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+HandyBand is licensed under the [MIT License](LICENSE).
