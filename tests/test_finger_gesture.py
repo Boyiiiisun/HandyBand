@@ -98,6 +98,24 @@ def test_hands_have_independent_safety_intervals() -> None:
     assert right_status.phase == "TRIGGERED"
 
 
+def test_left_hand_can_use_a_longer_safety_interval() -> None:
+    recognizer = FingerGestureRecognizer(
+        left_safety_interval_ms=1500,
+        right_safety_interval_ms=750,
+    )
+    left = _hand("Left", PATTERNS[1])
+    right = _hand("Right", PATTERNS[1])
+
+    recognizer.update((left, right), 0)
+    recognizer.update((left, right), 150)
+    left_before, right_before = recognizer.update((left, right), 900)
+    left_after, _ = recognizer.update((left, right), 1650)
+
+    assert left_before.phase == "SAFETY WAIT"
+    assert right_before.phase == "TRIGGERED"
+    assert left_after.phase == "TRIGGERED"
+
+
 @pytest.mark.parametrize("gesture", [5, 6])
 def test_gestures_without_audio_still_trigger_and_start_safety_interval(gesture: int) -> None:
     recognizer = FingerGestureRecognizer()

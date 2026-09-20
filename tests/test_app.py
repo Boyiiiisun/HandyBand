@@ -8,7 +8,7 @@ from handyband.app import (
     build_parser,
     run,
 )
-from handyband.styles import Piano
+from handyband.styles import Odysseus, Piano
 
 
 def test_cli_defaults() -> None:
@@ -22,11 +22,15 @@ def test_cli_defaults() -> None:
 
 
 def test_odysseus_default_sound_is_grouped_with_its_style() -> None:
+    assert Odysseus.left_safety_interval_ms == 750
+    assert Odysseus.right_safety_interval_ms == 750
     assert Path("HandyBand_Audio/Odysseus/drum.wav") == DEFAULT_DRUM_SOUND_PATH
     assert DEFAULT_DRUM_SOUND_PATH.is_file()
 
 
 def test_piano_maps_gestures_one_through_six_to_matching_audio() -> None:
+    assert Piano.left_safety_interval_ms == 1500
+    assert Piano.right_safety_interval_ms == 750
     assert Piano.finger_sound_paths == {
         gesture: Path(f"HandyBand_Audio/Piano/pi_{gesture}.wav")
         for gesture in range(1, 7)

@@ -54,11 +54,15 @@ class FingerGestureRecognizer:
         self,
         *,
         hold_ms: int = 150,
-        safety_interval_ms: int = 750,
+        left_safety_interval_ms: int = 750,
+        right_safety_interval_ms: int = 750,
         event_display_ms: int = 350,
     ) -> None:
         self.hold_ms = hold_ms
-        self.safety_interval_ms = safety_interval_ms
+        self._safety_intervals_ms = {
+            "Left": left_safety_interval_ms,
+            "Right": right_safety_interval_ms,
+        }
         self.event_display_ms = event_display_ms
         self._states = {side: _HandState() for side in ("Left", "Right")}
 
@@ -109,7 +113,8 @@ class FingerGestureRecognizer:
         state.confirmed_gesture = gesture
         safety_elapsed = (
             state.last_trigger_ms is None
-            or timestamp_ms - state.last_trigger_ms >= self.safety_interval_ms
+            or timestamp_ms - state.last_trigger_ms
+            >= self._safety_intervals_ms[handedness]
             or (state.last_event is not None and state.last_event.gesture != gesture)
         )
         if not safety_elapsed:
