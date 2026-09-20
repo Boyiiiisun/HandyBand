@@ -9,7 +9,10 @@ const VISION_WASM = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${VISI
 const HAND_MODEL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
 const POSE_MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
 const HOLD_MS = 150;
-const FINGER_SAFETY_MS = 750;
+const STYLE_SAFETY_INTERVALS_MS = {
+  Odysseus: { Left: 75_000, Right: 75_000 },
+  Piano: { Left: 1_640, Right: 820 },
+};
 const FINGER_ORDER = ["Thumb", "Index", "Middle", "Ring", "Pinky"];
 const FINGER_JOINTS = {
   Thumb: [1, 2, 3, 4],
@@ -365,7 +368,7 @@ function updateFingerRecognizer(hands, timestamp) {
     }
     current.confirmed = gesture;
     const canTrigger = current.lastTrigger === null
-      || timestamp - current.lastTrigger >= FINGER_SAFETY_MS
+      || timestamp - current.lastTrigger >= safetyIntervalFor(handedness)
       || current.lastEvent?.gesture !== gesture;
     if (!canTrigger) return { handedness, phase: "SAFETY WAIT", gesture };
     const event = { handedness, gesture, timestamp };
@@ -373,6 +376,10 @@ function updateFingerRecognizer(hands, timestamp) {
     current.lastEvent = event;
     return { handedness, phase: "TRIGGERED", gesture, event };
   });
+}
+
+function safetyIntervalFor(handedness) {
+  return STYLE_SAFETY_INTERVALS_MS[page.style.value][handedness];
 }
 
 function newDrumState() {
@@ -586,8 +593,8 @@ async function toggleSound() {
 page.style.addEventListener("change", () => {
   resetRecognizers();
   page.styleNote.textContent = page.style.value === "Piano"
-    ? "Piano — left and right numbered finger gestures"
-    : "Odysseus — drum and numbered finger gestures";
+    ? "PIANO: LEFT HAND 1.64S / RIGHT HAND 0.82S REARM."
+    : "ODYSSEUS: 75S REARM PER HAND, PLUS OPEN-HAND DRUM STROKES.";
   page.gestureState.textContent = page.style.value === "Piano"
     ? "Show a numbered hand shape and hold it briefly"
     : "Open your hand, then make a downward drum stroke";

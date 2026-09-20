@@ -222,7 +222,7 @@ def draw_observations(
         color = (0, 220, 255) if event is not None else (255, 255, 255)
         cv2.putText(
             frame,
-            f"{status.handedness}: {phase} | open: {'YES' if status.open_hand else 'NO'}",
+            f"{status.handedness}: {phase}",
             (panel_x, panel_y),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.55,

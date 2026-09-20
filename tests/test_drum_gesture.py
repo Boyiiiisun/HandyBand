@@ -124,24 +124,26 @@ def test_maximum_reference_speed_reaches_single_hand_volume_cap() -> None:
     recognizer = DrumGestureRecognizer(speed_smoothing=1.0)
 
     _left_status(recognizer, 0.30, 0, hand=_hand("Left", open_hand=True))
-    _left_status(recognizer, 0.42, 50)
-    result = _left_status(recognizer, 0.42, 100)
+    _left_status(recognizer, 0.44, 50)
+    result = _left_status(recognizer, 0.44, 100)
 
     assert result.recent_event is not None
-    assert result.recent_event.speed == pytest.approx(12.0)
+    assert result.recent_event.speed == pytest.approx(14.0)
     assert result.recent_event.volume == pytest.approx(0.75)
 
 
-def test_folded_hand_does_not_arm_downstroke() -> None:
+@pytest.mark.parametrize(
+    "hand", [None, _hand("Left", open_hand=False), _hand("Left", open_hand=True)]
+)
+def test_downstroke_triggers_regardless_of_hand_shape(hand: HandObservation | None) -> None:
     recognizer = DrumGestureRecognizer(speed_smoothing=1.0)
 
-    _left_status(recognizer, 0.38, 0, hand=_hand("Left", open_hand=False))
-    _left_status(recognizer, 0.41, 50)
-    _left_status(recognizer, 0.44, 100)
-    result = _left_status(recognizer, 0.44, 150)
+    _left_status(recognizer, 0.30, 0, hand=hand)
+    _left_status(recognizer, 0.42, 50, hand=hand)
+    result = _left_status(recognizer, 0.42, 100, hand=hand)
 
-    assert result.recent_event is None
-    assert result.phase == "SHOW OPEN HAND"
+    assert result.recent_event is not None
+    assert result.phase == "DRUM_HIT"
 
 
 def test_rejects_fast_motion_below_minimum_distance() -> None:

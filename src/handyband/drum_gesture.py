@@ -1,4 +1,4 @@
-"""Recognize open-hand arm-downstroke drum gestures."""
+"""Recognize arm-downstroke drum gestures regardless of hand shape."""
 
 from dataclasses import dataclass
 from math import hypot
@@ -17,7 +17,6 @@ class _HandState:
     previous_elbow_y: float | None = None
     previous_timestamp_ms: int | None = None
     filtered_speed: float = 0.0
-    open_hand_armed: bool = False
     swinging: bool = False
     stroke_started_ms: int = 0
     stroke_distance: float = 0.0
@@ -30,21 +29,20 @@ class _HandState:
         self.previous_elbow_y = None
         self.previous_timestamp_ms = None
         self.filtered_speed = 0.0
-        self.open_hand_armed = False
         self.swinging = False
         self.stroke_distance = 0.0
 
 
 class DrumGestureRecognizer:
-    """Maintain independent left/right open-hand downstroke state machines."""
+    """Maintain independent left/right arm-downstroke state machines."""
 
     def __init__(
         self,
         *,
         start_speed: float = 0.60,
         stop_speed: float = 0.20,
-        minimum_average_speed: float = 3.00,
-        maximum_volume_speed: float = 10.00,
+        minimum_average_speed: float = 2.00,
+        maximum_volume_speed: float = 14.00,
         minimum_volume: float = 0.10,
         maximum_volume: float = 0.75,
         volume_exponent: float = 2.00,
@@ -109,9 +107,6 @@ class DrumGestureRecognizer:
                 recent_event,
             )
 
-        if open_hand and not state.swinging:
-            state.open_hand_armed = True
-
         arm_length = hypot(
             forearm.wrist.x - forearm.elbow.x,
             forearm.wrist.y - forearm.elbow.y,
@@ -128,20 +123,19 @@ class DrumGestureRecognizer:
                 handedness,
                 state,
                 open_hand,
-                self._idle_phase(state, open_hand, timestamp_ms),
+                self._idle_phase(state, timestamp_ms),
                 recent_event,
             )
 
         elapsed_seconds = (timestamp_ms - previous_timestamp_ms) / 1000.0
         if elapsed_seconds <= 0.0 or elapsed_seconds > 0.20:
             state.reset_tracking()
-            state.open_hand_armed = open_hand
             self._remember_forearm(state, forearm, timestamp_ms)
             return self._status(
                 handedness,
                 state,
                 open_hand,
-                self._idle_phase(state, open_hand, timestamp_ms),
+                self._idle_phase(state, timestamp_ms),
                 recent_event,
             )
 
@@ -157,15 +151,13 @@ class DrumGestureRecognizer:
         self._remember_forearm(state, forearm, timestamp_ms)
 
         cooldown_active = self._cooldown_active(state, timestamp_ms)
-        phase = self._idle_phase(state, open_hand, timestamp_ms)
+        phase = self._idle_phase(state, timestamp_ms)
         if (
             not state.swinging
-            and state.open_hand_armed
             and not cooldown_active
             and state.filtered_speed >= self.start_speed
         ):
             state.swinging = True
-            state.open_hand_armed = False
             state.stroke_started_ms = timestamp_ms
             state.stroke_distance = 0.0
 
@@ -195,7 +187,7 @@ class DrumGestureRecognizer:
                     recent_event = event
                     phase = event.name
                 else:
-                    phase = self._idle_phase(state, open_hand, timestamp_ms)
+                    phase = self._idle_phase(state, timestamp_ms)
                 state.swinging = False
                 state.stroke_distance = 0.0
 
@@ -204,16 +196,11 @@ class DrumGestureRecognizer:
     def _idle_phase(
         self,
         state: _HandState,
-        open_hand: bool,
         timestamp_ms: int,
     ) -> str:
         if self._cooldown_active(state, timestamp_ms):
             return "COOLDOWN"
-        if open_hand:
-            return "OPEN HAND"
-        if state.open_hand_armed:
-            return "ARMED"
-        return "SHOW OPEN HAND"
+        return "ARMED"
 
     def _cooldown_active(self, state: _HandState, timestamp_ms: int) -> bool:
         return (
