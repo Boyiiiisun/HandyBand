@@ -9,7 +9,7 @@ from handyband.finger_gesture import FingerGestureRecognizer
 
 
 class Odysseus:
-    """Open-hand downstroke drums plus numbered finger gestures."""
+    """Arm-downstroke drums plus numbered finger gestures."""
 
     name = "Odysseus"
     left_safety_interval_ms = 75000
@@ -37,8 +37,8 @@ class Piano:
     """Numbered finger gestures mapped directly to six piano sounds."""
 
     name = "Piano"
-    left_safety_interval_ms = 1500
-    right_safety_interval_ms = 750
+    left_safety_interval_ms = 1640
+    right_safety_interval_ms = 820
     finger_sound_paths = {
         gesture: Path(f"HandyBand_Audio/Piano/pi_{gesture}.wav")
         for gesture in range(1, 7)

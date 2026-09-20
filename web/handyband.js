@@ -11,7 +11,7 @@ const POSE_MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmar
 const HOLD_MS = 150;
 const STYLE_SAFETY_INTERVALS_MS = {
   Odysseus: { Left: 75_000, Right: 75_000 },
-  Piano: { Left: 1_500, Right: 750 },
+  Piano: { Left: 1_640, Right: 820 },
 };
 const FINGER_ORDER = ["Thumb", "Index", "Middle", "Ring", "Pinky"];
 const FINGER_JOINTS = {
@@ -586,7 +586,7 @@ page.cameraButton.addEventListener("click", async () => {
 page.style.addEventListener("change", () => {
   resetRecognizers();
   page.styleNote.textContent = page.style.value === "Piano"
-    ? "PIANO: LEFT HAND 1.5S / RIGHT HAND 0.75S REARM."
+    ? "PIANO: LEFT HAND 1.64S / RIGHT HAND 0.82S REARM."
     : "ODYSSEUS: 75S REARM PER HAND, PLUS OPEN-HAND DRUM STROKES.";
   page.gestureState.textContent = page.style.value === "Piano"
     ? "Show a numbered hand shape and hold it briefly"
