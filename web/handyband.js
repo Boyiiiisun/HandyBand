@@ -29,10 +29,9 @@ const HAND_CONNECTIONS = [
 ];
 
 const page = {
-  landing: document.querySelector("#landing"),
   stage: document.querySelector("#stage"),
-  startButton: document.querySelector("#start-button"),
   cameraButton: document.querySelector("#camera-button"),
+  retryButton: document.querySelector("#retry-camera"),
   camera: document.querySelector("#camera"),
   overlay: document.querySelector("#landmark-overlay"),
   placeholder: document.querySelector("#camera-placeholder"),
@@ -60,7 +59,7 @@ const audioPaths = {
 };
 
 const state = {
-  audio: new AudioBank(),
+  audio: null,
   stream: null,
   handLandmarker: null,
   poseLandmarker: null,
@@ -86,10 +85,10 @@ class AudioBank {
     this.loading = null;
   }
 
-  unlock() {
+  async unlock() {
     this.context ??= new AudioContext();
     if (this.context.state !== "running") {
-      void this.context.resume();
+      await this.context.resume();
     }
     this.loading ??= this.loadAll();
     return this.loading;
@@ -124,6 +123,8 @@ class AudioBank {
   }
 }
 
+state.audio = new AudioBank();
+
 async function initializeModels() {
   if (state.modelsPromise) return state.modelsPromise;
   state.modelsPromise = (async () => {
@@ -156,9 +157,6 @@ async function initializeModels() {
 }
 
 async function startSession() {
-  page.landing.hidden = true;
-  page.stage.classList.add("is-visible");
-  page.cameraButton.focus();
   state.audio.unlock().catch(() => {});
 
   if (!navigator.mediaDevices?.getUserMedia) {
@@ -493,8 +491,18 @@ function resetRecognizers() {
   state.pendingDrum = null;
 }
 
-page.startButton.addEventListener("click", startSession);
-page.cameraButton.addEventListener("click", startSession);
+page.retryButton.addEventListener("click", startSession);
+page.cameraButton.addEventListener("click", async () => {
+  try {
+    await state.audio.unlock();
+    page.cameraButton.textContent = "SOUND ON";
+    page.modelStatus.textContent = "TRACKING AND AUDIO READY";
+  } catch (error) {
+    page.cameraButton.textContent = "SOUND UNAVAILABLE";
+    page.modelStatus.textContent = "AUDIO COULD NOT BE ENABLED";
+    console.error("HandyBand audio could not start.", error);
+  }
+});
 page.style.addEventListener("change", () => {
   resetRecognizers();
   page.styleNote.textContent = page.style.value === "Piano"
@@ -509,3 +517,5 @@ window.addEventListener("pagehide", () => {
   state.handLandmarker?.close();
   state.poseLandmarker?.close();
 });
+
+void startSession();
