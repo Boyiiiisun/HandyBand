@@ -231,19 +231,22 @@ function processFrame(timestamp) {
   if (!state.running || state.paused) return;
   if (page.camera.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && page.camera.currentTime !== state.lastVideoTime) {
     state.lastVideoTime = page.camera.currentTime;
+    // The animation-frame clock includes time spent in synchronous inference. The
+    // video timeline measures the interval between the camera frames themselves.
+    const motionTimestamp = Math.round(page.camera.currentTime * 1000);
     const handResult = state.handLandmarker.detectForVideo(page.camera, timestamp);
     const hands = observationsFrom(handResult);
-    const fingerStatuses = updateFingerRecognizer(hands, timestamp);
+    const fingerStatuses = updateFingerRecognizer(hands, motionTimestamp);
     const poseResult = page.style.value === "Odysseus"
       ? state.poseLandmarker.detectForVideo(page.camera, timestamp)
       : null;
     const drumStatuses = page.style.value === "Odysseus"
-      ? updateDrumRecognizer(hands, forearmsFrom(poseResult), timestamp)
+      ? updateDrumRecognizer(hands, forearmsFrom(poseResult), motionTimestamp)
       : [];
     state.latestFingerStatuses = fingerStatuses;
     state.latestDrumStatuses = drumStatuses;
     playFingerEvents(fingerStatuses);
-    playDrumEvents(drumStatuses.flatMap((status) => status.event ? [status.event] : []), timestamp);
+    playDrumEvents(drumStatuses.flatMap((status) => status.event ? [status.event] : []), motionTimestamp);
     drawLandmarks(hands);
     updateLiveText(fingerStatuses, drumStatuses);
   }
