@@ -1,0 +1,511 @@
+import {
+  FilesetResolver,
+  HandLandmarker,
+  PoseLandmarker,
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/+esm";
+
+const VISION_VERSION = "1.0.1";
+const VISION_WASM = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${VISION_VERSION}/wasm`;
+const HAND_MODEL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+const POSE_MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+const HOLD_MS = 150;
+const FINGER_SAFETY_MS = 750;
+const FINGER_ORDER = ["Thumb", "Index", "Middle", "Ring", "Pinky"];
+const FINGER_JOINTS = {
+  Thumb: [1, 2, 3, 4],
+  Index: [5, 6, 7, 8],
+  Middle: [9, 10, 11, 12],
+  Ring: [13, 14, 15, 16],
+  Pinky: [17, 18, 19, 20],
+};
+const GESTURE_PATTERNS = new Map([
+  ["00000", 0], ["01000", 1], ["01100", 2], ["00111", 3],
+  ["01111", 4], ["11111", 5], ["10001", 6], ["11000", 7],
+]);
+const HAND_CONNECTIONS = [
+  [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8],
+  [5, 9], [9, 10], [10, 11], [11, 12], [9, 13], [13, 14], [14, 15],
+  [15, 16], [13, 17], [17, 18], [18, 19], [19, 20], [0, 17],
+];
+
+const page = {
+  landing: document.querySelector("#landing"),
+  stage: document.querySelector("#stage"),
+  startButton: document.querySelector("#start-button"),
+  cameraButton: document.querySelector("#camera-button"),
+  camera: document.querySelector("#camera"),
+  overlay: document.querySelector("#landmark-overlay"),
+  placeholder: document.querySelector("#camera-placeholder"),
+  cameraStatus: document.querySelector("#camera-status"),
+  modelStatus: document.querySelector("#model-status"),
+  gestureState: document.querySelector("#gesture-state"),
+  style: document.querySelector("#style"),
+  styleNote: document.querySelector("#style-note"),
+};
+
+const audioPaths = {
+  drum: asset("HandyBand_Audio/Odysseus/drum.wav"),
+  odysseus: Object.fromEntries(
+    Array.from({ length: 7 }, (_, index) => [
+      index + 1,
+      asset(`HandyBand_Audio/Odysseus/od_oboe_${String(index + 1).padStart(2, "0")}.wav`),
+    ]),
+  ),
+  pianoRight: Object.fromEntries(
+    Array.from({ length: 6 }, (_, index) => [index + 1, asset(`HandyBand_Audio/Piano/pi_${index + 1}.wav`)]),
+  ),
+  pianoLeft: Object.fromEntries(
+    Array.from({ length: 6 }, (_, index) => [index + 1, asset(`HandyBand_Audio/Piano/lef_${index + 1}.wav`)]),
+  ),
+};
+
+const state = {
+  audio: new AudioBank(),
+  stream: null,
+  handLandmarker: null,
+  poseLandmarker: null,
+  modelsPromise: null,
+  running: false,
+  animationFrame: null,
+  lastVideoTime: -1,
+  fingerStates: new Map(["Left", "Right"].map((side) => [side, newFingerState()])),
+  drumStates: new Map(["Left", "Right"].map((side) => [side, newDrumState()])),
+  pendingDrum: null,
+  latestFingerStatuses: [],
+  latestDrumStatuses: [],
+};
+
+function asset(path) {
+  return new URL(`../${path}`, import.meta.url).href;
+}
+
+class AudioBank {
+  constructor() {
+    this.context = null;
+    this.buffers = new Map();
+    this.loading = null;
+  }
+
+  unlock() {
+    this.context ??= new AudioContext();
+    if (this.context.state !== "running") {
+      void this.context.resume();
+    }
+    this.loading ??= this.loadAll();
+    return this.loading;
+  }
+
+  async loadAll() {
+    const entries = [
+      ["drum", audioPaths.drum],
+      ...Object.entries(audioPaths.odysseus).map(([key, url]) => [`odysseus-${key}`, url]),
+      ...Object.entries(audioPaths.pianoRight).map(([key, url]) => [`piano-right-${key}`, url]),
+      ...Object.entries(audioPaths.pianoLeft).map(([key, url]) => [`piano-left-${key}`, url]),
+    ];
+    const results = await Promise.allSettled(entries.map(async ([key, url]) => {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Could not load ${key}`);
+      this.buffers.set(key, await this.context.decodeAudioData(await response.arrayBuffer()));
+    }));
+    const failed = results.filter((result) => result.status === "rejected").length;
+    page.modelStatus.textContent = failed ? `Tracking ready · ${failed} audio files unavailable` : "Tracking and audio ready";
+  }
+
+  play(key, volume = 1) {
+    const buffer = this.buffers.get(key);
+    if (!buffer || !this.context) return false;
+    const source = this.context.createBufferSource();
+    const gain = this.context.createGain();
+    source.buffer = buffer;
+    gain.gain.value = Math.max(0, Math.min(1, volume));
+    source.connect(gain).connect(this.context.destination);
+    source.start();
+    return true;
+  }
+}
+
+async function initializeModels() {
+  if (state.modelsPromise) return state.modelsPromise;
+  state.modelsPromise = (async () => {
+    page.modelStatus.textContent = "Loading hand and pose tracking…";
+    const vision = await FilesetResolver.forVisionTasks(VISION_WASM);
+    [state.handLandmarker, state.poseLandmarker] = await Promise.all([
+      HandLandmarker.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: HAND_MODEL },
+        runningMode: "VIDEO",
+        numHands: 2,
+        minHandDetectionConfidence: 0.5,
+        minHandPresenceConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      }),
+      PoseLandmarker.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: POSE_MODEL },
+        runningMode: "VIDEO",
+        numPoses: 1,
+        minPoseDetectionConfidence: 0.5,
+        minPosePresenceConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+        outputSegmentationMasks: false,
+      }),
+    ]);
+  })().catch((error) => {
+    state.modelsPromise = null;
+    throw error;
+  });
+  return state.modelsPromise;
+}
+
+async function startSession() {
+  page.landing.hidden = true;
+  page.stage.classList.add("is-visible");
+  page.cameraButton.focus();
+  state.audio.unlock().catch(() => {});
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    page.cameraStatus.textContent = "Camera preview is unavailable in this browser";
+    return;
+  }
+  try {
+    stopCamera();
+    page.cameraStatus.textContent = "Requesting camera permission…";
+    state.stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    });
+    page.camera.srcObject = state.stream;
+    await page.camera.play();
+    page.placeholder.classList.add("hidden");
+    page.cameraButton.textContent = "Camera enabled";
+    page.cameraStatus.textContent = "Loading gesture models…";
+    await initializeModels();
+    state.running = true;
+    page.cameraStatus.textContent = "Camera on · show a gesture";
+    state.animationFrame ??= requestAnimationFrame(processFrame);
+  } catch (error) {
+    stopCamera();
+    page.cameraStatus.textContent = error.name === "NotAllowedError"
+      ? "Camera permission was not granted"
+      : "Could not start the camera or gesture models";
+    page.modelStatus.textContent = "Unable to initialize browser tracking";
+    page.placeholder.classList.remove("hidden");
+    console.error("HandyBand could not start.", error);
+  }
+}
+
+function stopCamera() {
+  state.running = false;
+  if (state.animationFrame) cancelAnimationFrame(state.animationFrame);
+  state.animationFrame = null;
+  state.lastVideoTime = -1;
+  state.stream?.getTracks().forEach((track) => track.stop());
+  state.stream = null;
+  page.camera.srcObject = null;
+  clearOverlay();
+}
+
+function processFrame(timestamp) {
+  state.animationFrame = null;
+  if (!state.running) return;
+  if (page.camera.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && page.camera.currentTime !== state.lastVideoTime) {
+    state.lastVideoTime = page.camera.currentTime;
+    const handResult = state.handLandmarker.detectForVideo(page.camera, timestamp);
+    const hands = observationsFrom(handResult);
+    const fingerStatuses = updateFingerRecognizer(hands, timestamp);
+    const poseResult = page.style.value === "Odysseus"
+      ? state.poseLandmarker.detectForVideo(page.camera, timestamp)
+      : null;
+    const drumStatuses = page.style.value === "Odysseus"
+      ? updateDrumRecognizer(hands, forearmsFrom(poseResult), timestamp)
+      : [];
+    state.latestFingerStatuses = fingerStatuses;
+    state.latestDrumStatuses = drumStatuses;
+    playFingerEvents(fingerStatuses);
+    playDrumEvents(drumStatuses.flatMap((status) => status.event ? [status.event] : []), timestamp);
+    drawLandmarks(hands);
+    updateLiveText(fingerStatuses, drumStatuses);
+  }
+  state.animationFrame = requestAnimationFrame(processFrame);
+}
+
+function observationsFrom(result) {
+  return (result.landmarks ?? []).map((landmarks, index) => ({
+    handedness: result.handednesses?.[index]?.[0]?.categoryName ?? "Unknown",
+    landmarks,
+    fingers: classifyFingers(landmarks),
+  }));
+}
+
+function forearmsFrom(result) {
+  const landmarks = result?.landmarks?.[0];
+  if (!landmarks) return [];
+  return [["Left", 13, 15], ["Right", 14, 16]].flatMap(([handedness, elbowIndex, wristIndex]) => {
+    const elbow = landmarks[elbowIndex];
+    const wrist = landmarks[wristIndex];
+    const confidence = Math.min(elbow?.visibility ?? 0, wrist?.visibility ?? 0);
+    return confidence >= 0.5 ? [{ handedness, elbow, wrist, confidence }] : [];
+  });
+}
+
+function classifyFingers(landmarks) {
+  if (landmarks.length !== 21) return [];
+  const wrist = landmarks[0];
+  return FINGER_ORDER.map((name) => {
+    const [baseIndex, firstIndex, secondIndex, tipIndex] = FINGER_JOINTS[name];
+    const base = landmarks[baseIndex];
+    const first = landmarks[firstIndex];
+    const second = landmarks[secondIndex];
+    const tip = landmarks[tipIndex];
+    return {
+      name,
+      extended: jointAngle(base, first, second) >= 155
+        && jointAngle(first, second, tip) >= 155
+        && distance(wrist, tip) > distance(wrist, first),
+    };
+  });
+}
+
+function jointAngle(first, joint, last) {
+  const a = [first.x - joint.x, first.y - joint.y, first.z - joint.z];
+  const b = [last.x - joint.x, last.y - joint.y, last.z - joint.z];
+  const magnitudeA = Math.hypot(...a);
+  const magnitudeB = Math.hypot(...b);
+  if (!magnitudeA || !magnitudeB) return 0;
+  const cosine = a.reduce((sum, value, index) => sum + value * b[index], 0) / (magnitudeA * magnitudeB);
+  return Math.acos(Math.max(-1, Math.min(1, cosine))) * 180 / Math.PI;
+}
+
+function distance(first, second) {
+  return Math.hypot(first.x - second.x, first.y - second.y, first.z - second.z);
+}
+
+function numberedGesture(hand) {
+  if (!hand) return null;
+  const fingers = new Map(hand.fingers.map((finger) => [finger.name, finger.extended]));
+  if (FINGER_ORDER.some((name) => !fingers.has(name))) return null;
+  return GESTURE_PATTERNS.get(FINGER_ORDER.map((name) => fingers.get(name) ? "1" : "0").join("")) ?? null;
+}
+
+function newFingerState() {
+  return { candidate: null, since: null, confirmed: null, lastTrigger: null, lastEvent: null };
+}
+
+function updateFingerRecognizer(hands, timestamp) {
+  const handsBySide = new Map(hands.map((hand) => [hand.handedness, hand]));
+  return ["Left", "Right"].map((handedness) => {
+    const current = state.fingerStates.get(handedness);
+    const gesture = numberedGesture(handsBySide.get(handedness));
+    if (gesture === null) {
+      current.candidate = current.since = current.confirmed = null;
+      return { handedness, phase: handsBySide.has(handedness) ? "NO GESTURE" : "TRACKING LOST" };
+    }
+    if (gesture !== current.candidate) {
+      current.candidate = gesture;
+      current.since = timestamp;
+      current.confirmed = null;
+    }
+    if (timestamp - current.since < HOLD_MS) {
+      return { handedness, phase: "HOLDING", gesture };
+    }
+    current.confirmed = gesture;
+    const canTrigger = current.lastTrigger === null
+      || timestamp - current.lastTrigger >= FINGER_SAFETY_MS
+      || current.lastEvent?.gesture !== gesture;
+    if (!canTrigger) return { handedness, phase: "SAFETY WAIT", gesture };
+    const event = { handedness, gesture, timestamp };
+    current.lastTrigger = timestamp;
+    current.lastEvent = event;
+    return { handedness, phase: "TRIGGERED", gesture, event };
+  });
+}
+
+function newDrumState() {
+  return { previousWristY: null, previousElbowY: null, previousTimestamp: null, filteredSpeed: 0,
+    openHandArmed: false, swinging: false, strokeStarted: 0, strokeDistance: 0, lastTrigger: null };
+}
+
+function resetDrumTracking(current) {
+  current.previousWristY = current.previousElbowY = current.previousTimestamp = null;
+  current.filteredSpeed = 0;
+  current.openHandArmed = current.swinging = false;
+  current.strokeDistance = 0;
+}
+
+function rememberForearm(current, forearm, timestamp) {
+  current.previousWristY = forearm.wrist.y;
+  current.previousElbowY = forearm.elbow.y;
+  current.previousTimestamp = timestamp;
+}
+
+function updateDrumRecognizer(hands, forearms, timestamp) {
+  const handsBySide = new Map(hands.map((hand) => [hand.handedness, hand]));
+  const forearmsBySide = new Map(forearms.map((forearm) => [forearm.handedness, forearm]));
+  return ["Left", "Right"].map((handedness) => updateDrumHand(
+    handedness, handsBySide.get(handedness), forearmsBySide.get(handedness), timestamp,
+  ));
+}
+
+function updateDrumHand(handedness, hand, forearm, timestamp) {
+  const current = state.drumStates.get(handedness);
+  const openHand = Boolean(hand && hand.fingers.every((finger) => finger.extended));
+  if (!forearm) {
+    resetDrumTracking(current);
+    return { handedness, phase: "TRACKING LOST", openHand };
+  }
+  if (openHand && !current.swinging) current.openHandArmed = true;
+  const armLength = Math.hypot(forearm.wrist.x - forearm.elbow.x, forearm.wrist.y - forearm.elbow.y);
+  if (current.previousTimestamp === null || armLength <= 0.000001) {
+    rememberForearm(current, forearm, timestamp);
+    return { handedness, phase: drumIdlePhase(current, openHand, timestamp), openHand };
+  }
+  const elapsedSeconds = (timestamp - current.previousTimestamp) / 1000;
+  if (elapsedSeconds <= 0 || elapsedSeconds > 0.2) {
+    resetDrumTracking(current);
+    current.openHandArmed = openHand;
+    rememberForearm(current, forearm, timestamp);
+    return { handedness, phase: drumIdlePhase(current, openHand, timestamp), openHand };
+  }
+  const wristDelta = forearm.wrist.y - current.previousWristY;
+  const elbowDelta = forearm.elbow.y - current.previousElbowY;
+  const relativeDownwardDelta = wristDelta - elbowDelta;
+  const relativeSpeed = relativeDownwardDelta / armLength / elapsedSeconds;
+  const rawSpeed = wristDelta > 0 ? relativeSpeed : Math.min(0, relativeSpeed);
+  current.filteredSpeed = 0.45 * rawSpeed + 0.55 * current.filteredSpeed;
+  rememberForearm(current, forearm, timestamp);
+  const cooldown = current.lastTrigger !== null && timestamp - current.lastTrigger < 500;
+  if (!current.swinging && current.openHandArmed && !cooldown && current.filteredSpeed >= 0.6) {
+    current.swinging = true;
+    current.openHandArmed = false;
+    current.strokeStarted = timestamp;
+    current.strokeDistance = 0;
+  }
+  if (!current.swinging) return { handedness, phase: drumIdlePhase(current, openHand, timestamp), openHand };
+  current.strokeDistance += Math.max(0, relativeDownwardDelta / armLength);
+  if (current.filteredSpeed > 0.2) return { handedness, phase: "SWINGING", openHand };
+  const duration = Math.max((timestamp - current.strokeStarted) / 1000, 0.000001);
+  const averageSpeed = current.strokeDistance / duration;
+  current.swinging = false;
+  current.strokeDistance = 0;
+  if (averageSpeed < 3 || !Number.isFinite(averageSpeed)) {
+    return { handedness, phase: drumIdlePhase(current, openHand, timestamp), openHand };
+  }
+  current.lastTrigger = timestamp;
+  const progress = Math.max(0, Math.min(1, (averageSpeed - 3) / 7));
+  return { handedness, phase: "DRUM HIT", openHand, event: { handedness, timestamp, volume: 0.1 + progress ** 2 * 0.65 } };
+}
+
+function drumIdlePhase(current, openHand, timestamp) {
+  if (current.lastTrigger !== null && timestamp - current.lastTrigger < 500) return "COOLDOWN";
+  if (openHand) return "OPEN HAND";
+  return current.openHandArmed ? "ARMED" : "SHOW OPEN HAND";
+}
+
+function playFingerEvents(statuses) {
+  for (const status of statuses) {
+    if (!status.event) continue;
+    const key = page.style.value === "Piano"
+      ? `piano-${status.handedness === "Left" ? "left" : "right"}-${status.gesture}`
+      : `odysseus-${status.gesture}`;
+    state.audio.play(key);
+  }
+}
+
+function playDrumEvents(events, timestamp) {
+  const remaining = [...events];
+  if (state.pendingDrum) {
+    const partnerIndex = remaining.findIndex((event) => event.handedness !== state.pendingDrum.handedness
+      && event.timestamp - state.pendingDrum.timestamp <= 80);
+    if (partnerIndex >= 0) {
+      const partner = remaining.splice(partnerIndex, 1)[0];
+      state.audio.play("drum", Math.min(1, state.pendingDrum.volume + partner.volume));
+      state.pendingDrum = null;
+    } else if (timestamp - state.pendingDrum.timestamp >= 80) {
+      state.audio.play("drum", state.pendingDrum.volume);
+      state.pendingDrum = null;
+    }
+  }
+  for (const event of remaining) {
+    if (!state.pendingDrum) state.pendingDrum = event;
+    else if (event.handedness !== state.pendingDrum.handedness) {
+      state.audio.play("drum", Math.min(1, event.volume + state.pendingDrum.volume));
+      state.pendingDrum = null;
+    } else {
+      state.audio.play("drum", state.pendingDrum.volume);
+      state.pendingDrum = event;
+    }
+  }
+}
+
+function updateLiveText(fingerStatuses, drumStatuses) {
+  const fingers = fingerStatuses.filter((status) => status.phase !== "TRACKING LOST")
+    .map((status) => `${status.handedness} ${status.gesture ?? "—"}: ${status.phase}`);
+  const drums = drumStatuses.filter((status) => status.phase === "DRUM HIT" || status.phase === "SWINGING")
+    .map((status) => `${status.handedness}: ${status.phase}`);
+  page.gestureState.textContent = [...fingers, ...drums].join(" · ") || "Show one or both hands to the camera";
+}
+
+function drawLandmarks(hands) {
+  const canvas = page.overlay;
+  const rect = canvas.getBoundingClientRect();
+  const ratio = window.devicePixelRatio || 1;
+  const width = Math.round(rect.width * ratio);
+  const height = Math.round(rect.height * ratio);
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  const context = canvas.getContext("2d");
+  context.clearRect(0, 0, width, height);
+  if (!page.camera.videoWidth || !page.camera.videoHeight) return;
+  const sourceRatio = page.camera.videoWidth / page.camera.videoHeight;
+  const viewRatio = rect.width / rect.height;
+  const drawWidth = (sourceRatio > viewRatio ? rect.width : rect.height * sourceRatio) * ratio;
+  const drawHeight = (sourceRatio > viewRatio ? rect.width / sourceRatio : rect.height) * ratio;
+  const offsetX = (width - drawWidth) / 2;
+  const offsetY = (height - drawHeight) / 2;
+  context.lineWidth = Math.max(1.5, 2 * ratio);
+  for (const hand of hands) {
+    context.strokeStyle = hand.handedness === "Left" ? "#8fddc0" : "#f3ca7c";
+    context.fillStyle = "#ffffff";
+    context.beginPath();
+    for (const [from, to] of HAND_CONNECTIONS) {
+      const start = hand.landmarks[from];
+      const end = hand.landmarks[to];
+      context.moveTo(offsetX + start.x * drawWidth, offsetY + start.y * drawHeight);
+      context.lineTo(offsetX + end.x * drawWidth, offsetY + end.y * drawHeight);
+    }
+    context.stroke();
+    for (const landmark of hand.landmarks) {
+      context.beginPath();
+      context.arc(offsetX + landmark.x * drawWidth, offsetY + landmark.y * drawHeight, 2.3 * ratio, 0, Math.PI * 2);
+      context.fill();
+    }
+  }
+}
+
+function clearOverlay() {
+  const context = page.overlay.getContext("2d");
+  context.clearRect(0, 0, page.overlay.width, page.overlay.height);
+}
+
+function resetRecognizers() {
+  state.fingerStates = new Map(["Left", "Right"].map((side) => [side, newFingerState()]));
+  state.drumStates = new Map(["Left", "Right"].map((side) => [side, newDrumState()]));
+  state.pendingDrum = null;
+}
+
+page.startButton.addEventListener("click", startSession);
+page.cameraButton.addEventListener("click", startSession);
+page.style.addEventListener("change", () => {
+  resetRecognizers();
+  page.styleNote.textContent = page.style.value === "Piano"
+    ? "Piano — left and right numbered finger gestures"
+    : "Odysseus — drum and numbered finger gestures";
+  page.gestureState.textContent = page.style.value === "Piano"
+    ? "Show a numbered hand shape and hold it briefly"
+    : "Open your hand, then make a downward drum stroke";
+});
+window.addEventListener("pagehide", () => {
+  stopCamera();
+  state.handLandmarker?.close();
+  state.poseLandmarker?.close();
+});
