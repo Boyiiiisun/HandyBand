@@ -8,12 +8,19 @@ class _FakeChannel:
     def __init__(self) -> None:
         self.sound = None
         self.volume = None
+        self.fadeout_ms = None
 
     def play(self, sound) -> None:
         self.sound = sound
 
     def set_volume(self, volume: float) -> None:
         self.volume = volume
+
+    def fadeout(self, milliseconds: int) -> None:
+        self.fadeout_ms = milliseconds
+
+    def get_sound(self):
+        return self.sound
 
 
 class _FakeMixer:
@@ -68,14 +75,38 @@ def test_loads_only_four_mapped_odysseus_sounds() -> None:
     ]
 
 
-def test_loads_six_mapped_piano_sounds() -> None:
+def test_loads_right_and_left_piano_sounds() -> None:
     pygame = _FakePygame()
-    paths = {number: Path(f"pi_{number}.wav") for number in range(1, 7)}
+    right_paths = {number: Path(f"pi_{number}.wav") for number in range(1, 7)}
+    left_paths = {number: Path(f"lef_{number}.wav") for number in range(1, 7)}
 
-    FingerAudioPlayer(paths, pygame_module=pygame)
+    FingerAudioPlayer(
+        right_paths,
+        left_sound_paths=left_paths,
+        pygame_module=pygame,
+    )
 
-    assert pygame.mixer.loaded_paths == [f"pi_{number}.wav" for number in range(1, 7)]
+    assert pygame.mixer.loaded_paths == [
+        *(f"pi_{number}.wav" for number in range(1, 7)),
+        *(f"lef_{number}.wav" for number in range(1, 7)),
+    ]
     assert pygame.mixer.initialized
+
+
+def test_left_and_right_events_use_their_own_audio() -> None:
+    pygame = _FakePygame()
+    player = FingerAudioPlayer(
+        {1: Path("right-one.wav")},
+        left_sound_paths={1: Path("left-one.wav")},
+        pygame_module=pygame,
+    )
+
+    player.process((_event("Right", 1, 0), _event("Left", 1, 0)))
+
+    assert [channel.sound for channel in pygame.mixer.channels] == [
+        "right-one.wav",
+        "left-one.wav",
+    ]
 
 
 def test_each_mapped_event_plays_on_an_independent_channel() -> None:
@@ -89,6 +120,61 @@ def test_each_mapped_event_plays_on_an_independent_channel() -> None:
 
     assert [channel.sound for channel in pygame.mixer.channels] == ["one.wav", "two.wav"]
     assert [channel.volume for channel in pygame.mixer.channels] == [1.0, 1.0]
+    assert [channel.fadeout_ms for channel in pygame.mixer.channels] == [None, None]
+
+
+def test_new_gesture_fades_only_the_same_hands_audio() -> None:
+    pygame = _FakePygame()
+    player = FingerAudioPlayer(
+        {1: Path("one.wav"), 2: Path("two.wav")},
+        pygame_module=pygame,
+    )
+
+    player.process((_event("Left", 1, 0), _event("Right", 1, 0)))
+    left_channel, right_channel = pygame.mixer.channels
+    player.process((_event("Left", 2, 350),))
+
+    assert left_channel.fadeout_ms == 150
+    assert right_channel.fadeout_ms is None
+    assert pygame.mixer.channels[-1].sound == "two.wav"
+
+
+def test_repeated_same_gesture_does_not_fade_previous_audio() -> None:
+    pygame = _FakePygame()
+    player = FingerAudioPlayer({1: Path("one.wav")}, pygame_module=pygame)
+
+    player.process((_event("Left", 1, 0),))
+    first_channel = pygame.mixer.channels[0]
+    player.process((_event("Left", 1, 500),))
+
+    assert first_channel.fadeout_ms is None
+
+
+def test_silent_gesture_fades_the_same_hands_audio() -> None:
+    pygame = _FakePygame()
+    player = FingerAudioPlayer({1: Path("one.wav")}, pygame_module=pygame)
+
+    player.process((_event("Left", 1, 0), _event("Right", 1, 0)))
+    left_channel, right_channel = pygame.mixer.channels
+    player.process((_event("Left", 5, 350),))
+
+    assert left_channel.fadeout_ms == 150
+    assert right_channel.fadeout_ms is None
+
+
+def test_switch_does_not_fade_a_channel_reused_by_drum_audio() -> None:
+    pygame = _FakePygame()
+    player = FingerAudioPlayer(
+        {1: Path("one.wav"), 2: Path("two.wav")},
+        pygame_module=pygame,
+    )
+
+    player.process((_event("Left", 1, 0),))
+    reused_channel = pygame.mixer.channels[0]
+    reused_channel.sound = "drum.wav"
+    player.process((_event("Left", 2, 350),))
+
+    assert reused_channel.fadeout_ms is None
 
 
 def test_unmapped_gestures_are_recognized_but_silent() -> None:

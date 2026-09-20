@@ -10,3 +10,6 @@ build/
 dist/
 models/*.task
 models/*.tmp
+HandyBand_Audio/Interstellar/*.mid
+HandyBand_Audio/Interstellar/score.json
+HandyBand_Audio/Interstellar/*.wav

@@ -5,6 +5,7 @@ import sys
 import time
 from pathlib import Path
 
+from handyband.interstellar import DEFAULT_SCORE_PATH, Interstellar
 from handyband.styles import Odysseus, Piano
 
 DEFAULT_MODEL_PATH = Path("models/hand_landmarker.task")
@@ -18,6 +19,10 @@ def build_parser() -> argparse.ArgumentParser:
         description="Track two hands, five fingers, and forearm anchors from a camera."
     )
     parser.add_argument("--camera", type=int, default=0, help="OpenCV camera index (default: 0)")
+    parser.add_argument("--style", choices=(Odysseus.name, Piano.name, Interstellar.name),
+                        default=Odysseus.name)
+    parser.add_argument("--score", type=Path, default=DEFAULT_SCORE_PATH,
+                        help="Interstellar guided score JSON (default: imported local score)")
     parser.add_argument(
         "--model",
         type=Path,
@@ -67,6 +72,8 @@ def run(
     confidence: float,
     pose_model_path: Path = DEFAULT_POSE_MODEL_PATH,
     drum_sound_path: Path = DEFAULT_DRUM_SOUND_PATH,
+    style_name: str = Odysseus.name,
+    score_path: Path = DEFAULT_SCORE_PATH,
 ) -> int:
     if not model_path.is_file():
         print(
@@ -107,9 +114,15 @@ def run(
     last_timestamp_ms = -1
     smoothed_fps = 0.0
     style = None
-    style_menu = StyleMenu((Odysseus.name, Piano.name), Odysseus.name)
+    style_menu = StyleMenu((Odysseus.name, Piano.name, Interstellar.name), style_name)
+
+    def create_style(name: str):
+        if name == Interstellar.name:
+            return Interstellar(score_path)
+        return Piano() if name == Piano.name else Odysseus(drum_sound_path)
+
     try:
-        style = Odysseus(drum_sound_path)
+        style = create_style(style_name)
         cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_NORMAL)
         cv2.setMouseCallback(WINDOW_TITLE, style_menu.on_mouse)
         with (
@@ -146,11 +159,18 @@ def run(
                 forearms = pose_tracker.detect(rgb_frame, timestamp_ms)
                 if style_menu.style_name != style.name:
                     style.close()
-                    style = (
-                        Piano()
-                        if style_menu.style_name == Piano.name
-                        else Odysseus(drum_sound_path)
-                    )
+                    style = None
+                    style = create_style(style_menu.style_name)
+                if isinstance(style, Interstellar):
+                    style.update(hands, timestamp_ms)
+                    guided_frame = style.draw(frame)
+                    style_menu.draw(guided_frame)
+                    cv2.imshow(WINDOW_TITLE, guided_frame)
+                    key = cv2.waitKey(1) & 0xFF
+                    if key in (ord("q"), ord("Q"), 27) or _window_is_closed(cv2):
+                        return 0
+                    style.on_key(key)
+                    continue
                 drum_statuses = (
                     ()
                     if style.recognizer is None
@@ -194,6 +214,9 @@ def run(
                 key = cv2.waitKey(1) & 0xFF
                 if key in (ord("q"), ord("Q"), 27) or _window_is_closed(cv2):
                     return 0
+    except (ValueError, OSError, KeyError, TypeError) as exc:
+        print(f"Could not load music style: {exc}", file=sys.stderr)
+        return 2
     finally:
         if style is not None:
             style.close()
@@ -211,4 +234,6 @@ def main(argv: list[str] | None = None) -> int:
         not args.no_mirror,
         args.confidence,
         args.pose_model,
+        style_name=args.style,
+        score_path=args.score,
     )

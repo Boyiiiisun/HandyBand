@@ -10,12 +10,14 @@ from handyband.models import (
 
 FINGER_ORDER = ("Thumb", "Index", "Middle", "Ring", "Pinky")
 GESTURE_PATTERNS = {
+    (False, False, False, False, False): 0,
     (False, True, False, False, False): 1,
     (False, True, True, False, False): 2,
-    (False, True, True, True, False): 3,
+    (False, False, True, True, True) or (False, True, True, True, False): 3,
     (False, True, True, True, True): 4,
     (True, True, True, True, True): 5,
     (True, False, False, False, True): 6,
+    (True, True, False, False, False): 7,
 }
 
 
@@ -51,7 +53,7 @@ class FingerGestureRecognizer:
         self,
         *,
         hold_ms: int = 150,
-        safety_interval_ms: int = 500,
+        safety_interval_ms: int = 750,
         event_display_ms: int = 350,
     ) -> None:
         self.hold_ms = hold_ms
@@ -107,6 +109,7 @@ class FingerGestureRecognizer:
         safety_elapsed = (
             state.last_trigger_ms is None
             or timestamp_ms - state.last_trigger_ms >= self.safety_interval_ms
+            or (state.last_event is not None and state.last_event.gesture != gesture)
         )
         if not safety_elapsed:
             return self._status(handedness, state, "SAFETY WAIT", recent_event)

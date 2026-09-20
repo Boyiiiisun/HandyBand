@@ -32,6 +32,11 @@ def test_piano_maps_gestures_one_through_six_to_matching_audio() -> None:
         for gesture in range(1, 7)
     }
     assert all(path.is_file() for path in Piano.finger_sound_paths.values())
+    assert Piano.left_finger_sound_paths == {
+        gesture: Path(f"HandyBand_Audio/Piano/lef_{gesture}.wav")
+        for gesture in range(1, 7)
+    }
+    assert all(path.is_file() for path in Piano.left_finger_sound_paths.values())
 
 
 def test_missing_model_fails_before_opening_camera(tmp_path: Path, capsys) -> None:

@@ -53,7 +53,7 @@ def test_requires_150_ms_hold_then_repeats_after_500_ms() -> None:
     assert repeated.recent_event is not None
 
 
-def test_different_gesture_waits_for_same_per_hand_safety_interval() -> None:
+def test_different_gesture_triggers_as_soon_as_it_is_stable() -> None:
     recognizer = FingerGestureRecognizer()
     one = _hand("Left", PATTERNS[1])
     two = _hand("Left", PATTERNS[2])
@@ -61,8 +61,7 @@ def test_different_gesture_waits_for_same_per_hand_safety_interval() -> None:
     recognizer.update((one,), 0)
     recognizer.update((one,), 150)
     recognizer.update((two,), 200)
-    assert recognizer.update((two,), 350)[0].phase == "SAFETY WAIT"
-    result = recognizer.update((two,), 650)[0]
+    result = recognizer.update((two,), 350)[0]
 
     assert result.phase == "TRIGGERED"
     assert result.recent_event is not None
