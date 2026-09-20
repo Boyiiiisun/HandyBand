@@ -97,9 +97,9 @@
 
       .workbench {
         display: grid;
-        grid-template-columns: minmax(145px, .55fr) minmax(560px, 3.25fr) minmax(155px, .55fr);
+        grid-template-columns: minmax(195px, 1fr) minmax(0, 3.25fr) minmax(195px, 1fr);
         align-items: center;
-        gap: clamp(24px, 4vw, 72px);
+        gap: clamp(18px, 2vw, 32px);
         min-height: calc(100vh - 140px);
         padding: clamp(42px, 7vh, 90px) 0 24px;
       }
@@ -316,10 +316,33 @@
       .control small { color: var(--pink); }
       .meta { margin-top: 17px !important; color: var(--muted) !important; font-size: .64rem !important; }
 
+      /* Instruction copy and note/chord labels are editable in the HTML below. */
+      .gesture-list { list-style: none; width: 100%; max-width: 300px; margin: 0 auto; padding: 0; display: grid; gap: 9px; }
+      .gesture-row { display: grid; grid-template-columns: 20px 48px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 58px; }
+      .gesture-number { color: var(--muted); font-size: .7rem; }
+      .gesture-icon { display: block; width: 48px; height: 58px; }
+      .left-hand .gesture-icon { transform: scaleX(-1); }
+      .gesture-sound { font-size: .95rem; font-weight: 700; line-height: 1.5; text-align: center; white-space: nowrap; }
+      .note-slot { display: block; color: var(--ink); font-size: 1.2rem; font-weight: 700; line-height: 1.4; text-align: center; }
+      [data-instruction-style="Piano"] .gesture-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      [data-instruction-style="Piano"] .gesture-icon { justify-self: center; }
+      .piano-heading { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; gap: 8px; width: 100%; max-width: 300px; margin-left: auto; margin-right: auto; text-align: center; }
+      .piano-heading span { color: var(--cyan); font-size: .82rem; }
+      #left-instructions { grid-column: 1; }
+      .waveform-screen { display: block; width: 100%; height: auto; aspect-ratio: 5 / 3; border: 1px solid rgba(98, 232, 238, .3); border-radius: 8px; background: #03070b; box-shadow: inset 0 0 20px rgba(98, 232, 238, .08); }
+      .waveform-caption { margin-top: 12px; color: var(--muted); font-size: .6rem; letter-spacing: .06em; text-align: center; }
+      .monitor-stack { grid-column: 2; }
+      #right-instructions { grid-column: 3; }
+      .drum-guide { margin: 18px 0 0; padding-top: 12px; border-top: 1px solid rgba(98, 232, 238, .3); }
+      .drum-guide img { display: block; width: 100%; max-width: 240px; margin: 0 auto; }
+      .drum-guide figcaption { color: var(--ink); font-size: .65rem; line-height: 1.6; text-align: center; }
+      [data-instruction-style][hidden], .info-panel[hidden] { display: none; }
+
       :fullscreen { background: var(--black); }
       :fullscreen .stage { width: min(100%, 1800px); }
 
-      @media (max-width: 900px) {
+      @media (max-width: 1050px) {
+        #left-instructions, .monitor-stack, #right-instructions { grid-column: 1; }
         .workbench { grid-template-columns: 1fr; gap: 25px; padding-top: 44px; }
         .monitor-stack { order: -1; width: min(100%, 720px); margin: 0 auto; }
         .info-panel { width: min(100%, 720px); margin: 0 auto; }
@@ -346,9 +369,26 @@
       </header>
 
       <section class="workbench">
-        <aside class="info-panel" aria-labelledby="gesture-heading">
-          <p class="kicker">01 / INPUT</p>
-          <h1 id="gesture-heading">PLAY WITH YOUR HANDS</h1>
+        <aside id="left-instructions" class="info-panel" aria-label="Music visualizer and left-hand instructions">
+          <section data-instruction-style="Odysseus">
+            <p class="kicker">ODYSSEUS</p>
+            <h2>Sound wave</h2>
+            <canvas id="sound-wave" class="waveform-screen" width="600" height="360" role="img" aria-label="Live waveform of the Odysseus oboe and drum audio">Live audio waveform</canvas>
+            <div class="waveform-caption">OBOE + DRUM</div>
+          </section>
+          <section class="left-hand" data-instruction-style="Piano" hidden>
+            <p class="kicker">PIANO</p>
+            <h2 class="piano-heading">Left hand <span>Note</span></h2>
+            <!-- Edit the note/chord names below to change the displayed labels. -->
+            <ul class="gesture-list">
+              <li class="gesture-row"><img class="gesture-icon" src="./web/gestures/gesture-1.svg" alt="Index extended" width="48" height="58"><span class="note-slot">C2</span></li>
+              <li class="gesture-row"><img class="gesture-icon" src="./web/gestures/gesture-2.svg" alt="Index and middle extended" width="48" height="58"><span class="note-slot">D2</span></li>
+              <li class="gesture-row"><img class="gesture-icon" src="./web/gestures/gesture-3.svg" alt="Middle, ring and pinky extended; thumb and index bent" width="48" height="58"><span class="note-slot">E2</span></li>
+              <li class="gesture-row"><img class="gesture-icon" src="./web/gestures/gesture-4.svg" alt="Index, middle, ring and pinky extended" width="48" height="58"><span class="note-slot">F2</span></li>
+              <li class="gesture-row"><img class="gesture-icon" src="./web/gestures/gesture-5.svg" alt="All fingers extended" width="48" height="58"><span class="note-slot">G2</span></li>
+              <li class="gesture-row"><img class="gesture-icon" src="./web/gestures/gesture-6.svg" alt="Thumb and pinky extended" width="48" height="58"><span class="note-slot">A2</span></li>
+            </ul>
+          </section>
           <p id="gesture-state" class="hidden" aria-live="polite"></p>
         </aside>
 
@@ -371,11 +411,40 @@
           <div class="monitor-foot"><span class="power">LIVE INPUT</span><span id="channel-readout">ODYSSEUS</span></div>
         </section>
 
-        <aside class="info-panel" aria-label="Gesture instructions">
-          <p class="gesture-prompt">Try showing 1, 2, 3, 4…</p>
-          <select id="style" class="hidden" aria-label="Music style"><option>Odysseus</option><option>Piano</option></select>
-          <span id="style-note" class="hidden"></span>
+        <aside id="right-instructions" class="info-panel" aria-label="Music gesture instructions">
+          <section data-instruction-style="Odysseus">
+            <p class="kicker">ODYSSEUS</p>
+            <h2>Hand shapes → Oboe</h2>
+            <ul class="gesture-list">
+              <li class="gesture-row"><span class="gesture-number">01</span><img class="gesture-icon" src="./web/gestures/gesture-1.svg" alt="Index extended" width="48" height="58"><span class="gesture-sound">OBOE 01</span></li>
+              <li class="gesture-row"><span class="gesture-number">02</span><img class="gesture-icon" src="./web/gestures/gesture-2.svg" alt="Index and middle extended" width="48" height="58"><span class="gesture-sound">OBOE 02</span></li>
+              <li class="gesture-row"><span class="gesture-number">03</span><img class="gesture-icon" src="./web/gestures/gesture-3.svg" alt="Middle, ring and pinky extended; thumb and index bent" width="48" height="58"><span class="gesture-sound">OBOE 03</span></li>
+              <li class="gesture-row"><span class="gesture-number">04</span><img class="gesture-icon" src="./web/gestures/gesture-4.svg" alt="Index, middle, ring and pinky extended" width="48" height="58"><span class="gesture-sound">OBOE 04</span></li>
+              <li class="gesture-row"><span class="gesture-number">05</span><img class="gesture-icon" src="./web/gestures/gesture-5.svg" alt="All fingers extended" width="48" height="58"><span class="gesture-sound">OBOE 05</span></li>
+              <li class="gesture-row"><span class="gesture-number">06</span><img class="gesture-icon" src="./web/gestures/gesture-6.svg" alt="Thumb and pinky extended" width="48" height="58"><span class="gesture-sound">OBOE 06</span></li>
+              <li class="gesture-row"><span class="gesture-number">07</span><img class="gesture-icon" src="./web/gestures/gesture-7.svg" alt="Thumb and index extended" width="48" height="58"><span class="gesture-sound">OBOE 07</span></li>
+            </ul>
+            <figure class="drum-guide">
+              <img src="./web/gestures/drum-downstroke.svg" alt="A closed fist and forearm swing downward from the faint raised position" width="240" height="150">
+              <figcaption>Fist + downstroke → Drum</figcaption>
+            </figure>
+          </section>
+          <section data-instruction-style="Piano" hidden>
+            <p class="kicker">PIANO</p>
+            <h2 class="piano-heading">Right hand <span>Chord</span></h2>
+            <!-- Edit the note/chord names below to change the displayed labels. -->
+            <ul class="gesture-list">
+              <li class="gesture-row"><img class="gesture-icon" src="./web/gestures/gesture-1.svg" alt="Index extended" width="48" height="58"><span class="note-slot">C</span></li>
+              <li class="gesture-row"><img class="gesture-icon" src="./web/gestures/gesture-2.svg" alt="Index and middle extended" width="48" height="58"><span class="note-slot">Dm</span></li>
+              <li class="gesture-row"><img class="gesture-icon" src="./web/gestures/gesture-3.svg" alt="Middle, ring and pinky extended; thumb and index bent" width="48" height="58"><span class="note-slot">Em</span></li>
+              <li class="gesture-row"><img class="gesture-icon" src="./web/gestures/gesture-4.svg" alt="Index, middle, ring and pinky extended" width="48" height="58"><span class="note-slot">F</span></li>
+              <li class="gesture-row"><img class="gesture-icon" src="./web/gestures/gesture-5.svg" alt="All fingers extended" width="48" height="58"><span class="note-slot">G</span></li>
+              <li class="gesture-row"><img class="gesture-icon" src="./web/gestures/gesture-6.svg" alt="Thumb and pinky extended" width="48" height="58"><span class="note-slot">Am</span></li>
+            </ul>
+          </section>
         </aside>
+        <select id="style" class="hidden" aria-label="Music style"><option>Odysseus</option><option>Piano</option></select>
+        <span id="style-note" class="hidden"></span>
       </section>
     </main>
     <script type="module" src="./web/handyband.js"></script>

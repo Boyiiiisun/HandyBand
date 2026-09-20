@@ -60,6 +60,7 @@ const page = {
   gestureState: document.querySelector("#gesture-state"),
   style: document.querySelector("#style"),
   styleNote: document.querySelector("#style-note"),
+  soundWave: document.querySelector("#sound-wave"),
 };
 
 const audioPaths = {
@@ -103,10 +104,16 @@ class AudioBank {
     this.context = null;
     this.buffers = new Map();
     this.loading = null;
+    this.analyser = null;
   }
 
   async unlock() {
     this.context ??= new AudioContext();
+    if (!this.analyser) {
+      this.analyser = this.context.createAnalyser();
+      this.analyser.fftSize = 2048;
+      this.analyser.connect(this.context.destination);
+    }
     if (this.context.state !== "running") {
       await this.context.resume();
     }
@@ -141,13 +148,63 @@ class AudioBank {
     const gain = this.context.createGain();
     source.buffer = buffer;
     gain.gain.value = Math.max(0, Math.min(1, volume));
-    source.connect(gain).connect(this.context.destination);
+    const output = key === "drum" || key.startsWith("odysseus-")
+      ? this.analyser : this.context.destination;
+    source.connect(gain).connect(output);
+    source.onended = () => { source.disconnect(); gain.disconnect(); };
     source.start();
     return true;
   }
 }
 
 state.audio = new AudioBank();
+
+const waveContext = page.soundWave.getContext("2d");
+const waveSamples = new Float32Array(2048);
+let waveFrame = null;
+
+function drawSoundWave() {
+  waveFrame = null;
+  if (page.style.value !== "Odysseus" || document.hidden) return;
+  const { width, height } = page.soundWave;
+  waveSamples.fill(0);
+  if (state.audio.context?.state === "running" && state.audio.analyser) {
+    state.audio.analyser.getFloatTimeDomainData(waveSamples);
+  }
+  waveContext.clearRect(0, 0, width, height);
+  waveContext.strokeStyle = "rgba(98, 232, 238, .10)";
+  waveContext.lineWidth = 1;
+  waveContext.beginPath();
+  for (let x = 0; x <= width; x += 60) {
+    waveContext.moveTo(x, 0); waveContext.lineTo(x, height);
+  }
+  for (let y = 0; y <= height; y += 60) {
+    waveContext.moveTo(0, y); waveContext.lineTo(width, y);
+  }
+  waveContext.stroke();
+  waveContext.strokeStyle = "#62e8ee";
+  waveContext.lineWidth = 3;
+  waveContext.shadowColor = "#62e8ee";
+  waveContext.shadowBlur = 10;
+  waveContext.beginPath();
+  for (let i = 0; i < waveSamples.length; i++) {
+    const x = i * width / (waveSamples.length - 1);
+    const y = height / 2 - Math.max(-1, Math.min(1, waveSamples[i])) * height * .42;
+    if (i === 0) waveContext.moveTo(x, y);
+    else waveContext.lineTo(x, y);
+  }
+  waveContext.stroke();
+  waveContext.shadowBlur = 0;
+  waveFrame = requestAnimationFrame(drawSoundWave);
+}
+
+function updateSoundWave() {
+  if (waveFrame !== null) cancelAnimationFrame(waveFrame);
+  waveFrame = null;
+  drawSoundWave();
+}
+
+document.addEventListener("visibilitychange", updateSoundWave);
 
 async function initializeModels() {
   if (state.modelsPromise) return state.modelsPromise;
@@ -604,6 +661,10 @@ function selectChannel(style) {
 }
 
 function updateChannelControls() {
+  document.querySelectorAll("[data-instruction-style]").forEach((section) => {
+    section.hidden = section.dataset.instructionStyle !== page.style.value;
+  });
+  updateSoundWave();
   page.channelReadout.textContent = page.style.value.toUpperCase();
   page.channelButtons.forEach((button) => {
     button.setAttribute("aria-pressed", String(button.dataset.channel === page.style.value));
@@ -616,6 +677,7 @@ page.channelButtons.forEach((button) => {
 });
 updateChannelControls();
 window.addEventListener("pagehide", () => {
+  if (waveFrame !== null) cancelAnimationFrame(waveFrame);
   stopCamera();
   state.handLandmarker?.close();
   state.poseLandmarker?.close();

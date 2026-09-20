@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 150" fill="none" stroke="#62e8ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<title>Closed fist and forearm moving downward, with a faint raised starting position</title>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 1,1 L 8,5 L 1,9" stroke="#ec58be"/></marker><g id="arm"><path d="M 39,93 Q 54,81 74,84 L 163,84 L 174,75 Q 180,70 185,75 L 199,76 Q 206,78 204,85 Q 212,89 207,96 Q 211,102 204,107 Q 205,115 195,116 L 166,113 L 66,116 Q 45,117 36,106"/><path d="M 185,84 L 203,85 M 187,95 L 207,96 M 185,105 L 204,107 M 171,89 Q 186,85 186,93 Q 185,98 176,98 L 166,102"/></g></defs>
+<use href="#arm" transform="rotate(-30 39 103)" opacity=".3" stroke-dasharray="4 4"/>
+<path d="M 20,59 L 31,96 Q 34,111 45,114 M 43,54 L 53,84"/>
+<use href="#arm"/>
+<path d="M 207,36 Q 232,61 226,105" stroke="#ec58be" marker-end="url(#arrow)"/>
+</svg>
