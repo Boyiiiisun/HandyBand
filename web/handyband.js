@@ -9,6 +9,19 @@ const VISION_WASM = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${VISI
 const HAND_MODEL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
 const POSE_MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
 const HOLD_MS = 150;
+// Keep these values aligned with src/handyband/drum_gesture.py.
+const DRUM = {
+  startSpeed: 0.60,
+  stopSpeed: 0.20,
+  minimumAverageSpeed: 2.00,
+  maximumVolumeSpeed: 14.00,
+  minimumVolume: 0.10,
+  maximumVolume: 0.75,
+  volumeExponent: 2.00,
+  minimumDistance: 0.20,
+  speedSmoothing: 0.45,
+  cooldownMs: 500,
+};
 const STYLE_SAFETY_INTERVALS_MS = {
   Odysseus: { Left: 75_000, Right: 75_000 },
   Piano: { Left: 1_640, Right: 820 },
@@ -384,13 +397,13 @@ function safetyIntervalFor(handedness) {
 
 function newDrumState() {
   return { previousWristY: null, previousElbowY: null, previousTimestamp: null, filteredSpeed: 0,
-    openHandArmed: false, swinging: false, strokeStarted: 0, strokeDistance: 0, lastTrigger: null };
+    swinging: false, strokeStarted: 0, strokeDistance: 0, lastTrigger: null };
 }
 
 function resetDrumTracking(current) {
   current.previousWristY = current.previousElbowY = current.previousTimestamp = null;
   current.filteredSpeed = 0;
-  current.openHandArmed = current.swinging = false;
+  current.swinging = false;
   current.strokeDistance = 0;
 }
 
@@ -415,52 +428,55 @@ function updateDrumHand(handedness, hand, forearm, timestamp) {
     resetDrumTracking(current);
     return { handedness, phase: "TRACKING LOST", openHand };
   }
-  if (openHand && !current.swinging) current.openHandArmed = true;
   const armLength = Math.hypot(forearm.wrist.x - forearm.elbow.x, forearm.wrist.y - forearm.elbow.y);
   if (current.previousTimestamp === null || armLength <= 0.000001) {
     rememberForearm(current, forearm, timestamp);
-    return { handedness, phase: drumIdlePhase(current, openHand, timestamp), openHand };
+    return { handedness, phase: drumIdlePhase(current, timestamp), openHand };
   }
   const elapsedSeconds = (timestamp - current.previousTimestamp) / 1000;
   if (elapsedSeconds <= 0 || elapsedSeconds > 0.2) {
     resetDrumTracking(current);
-    current.openHandArmed = openHand;
     rememberForearm(current, forearm, timestamp);
-    return { handedness, phase: drumIdlePhase(current, openHand, timestamp), openHand };
+    return { handedness, phase: drumIdlePhase(current, timestamp), openHand };
   }
   const wristDelta = forearm.wrist.y - current.previousWristY;
   const elbowDelta = forearm.elbow.y - current.previousElbowY;
   const relativeDownwardDelta = wristDelta - elbowDelta;
   const relativeSpeed = relativeDownwardDelta / armLength / elapsedSeconds;
   const rawSpeed = wristDelta > 0 ? relativeSpeed : Math.min(0, relativeSpeed);
-  current.filteredSpeed = 0.45 * rawSpeed + 0.55 * current.filteredSpeed;
+  current.filteredSpeed = DRUM.speedSmoothing * rawSpeed
+    + (1 - DRUM.speedSmoothing) * current.filteredSpeed;
   rememberForearm(current, forearm, timestamp);
-  const cooldown = current.lastTrigger !== null && timestamp - current.lastTrigger < 500;
-  if (!current.swinging && current.openHandArmed && !cooldown && current.filteredSpeed >= 0.6) {
+  const cooldown = current.lastTrigger !== null && timestamp - current.lastTrigger < DRUM.cooldownMs;
+  if (!current.swinging && !cooldown && current.filteredSpeed >= DRUM.startSpeed) {
     current.swinging = true;
-    current.openHandArmed = false;
     current.strokeStarted = timestamp;
     current.strokeDistance = 0;
   }
-  if (!current.swinging) return { handedness, phase: drumIdlePhase(current, openHand, timestamp), openHand };
+  if (!current.swinging) return { handedness, phase: drumIdlePhase(current, timestamp), openHand };
   current.strokeDistance += Math.max(0, relativeDownwardDelta / armLength);
-  if (current.filteredSpeed > 0.2) return { handedness, phase: "SWINGING", openHand };
+  if (current.filteredSpeed > DRUM.stopSpeed) return { handedness, phase: "SWINGING", openHand };
   const duration = Math.max((timestamp - current.strokeStarted) / 1000, 0.000001);
-  const averageSpeed = current.strokeDistance / duration;
+  const strokeDistance = current.strokeDistance;
+  const averageSpeed = strokeDistance / duration;
   current.swinging = false;
   current.strokeDistance = 0;
-  if (averageSpeed < 3 || !Number.isFinite(averageSpeed)) {
-    return { handedness, phase: drumIdlePhase(current, openHand, timestamp), openHand };
+  if (strokeDistance < DRUM.minimumDistance
+    || averageSpeed < DRUM.minimumAverageSpeed
+    || !Number.isFinite(averageSpeed)) {
+    return { handedness, phase: drumIdlePhase(current, timestamp), openHand };
   }
   current.lastTrigger = timestamp;
-  const progress = Math.max(0, Math.min(1, (averageSpeed - 3) / 7));
-  return { handedness, phase: "DRUM HIT", openHand, event: { handedness, timestamp, volume: 0.1 + progress ** 2 * 0.65 } };
+  const progress = Math.max(0, Math.min(1,
+    (averageSpeed - DRUM.minimumAverageSpeed) / (DRUM.maximumVolumeSpeed - DRUM.minimumAverageSpeed)));
+  const volume = DRUM.minimumVolume + progress ** DRUM.volumeExponent
+    * (DRUM.maximumVolume - DRUM.minimumVolume);
+  return { handedness, phase: "DRUM HIT", openHand, event: { handedness, timestamp, volume } };
 }
 
-function drumIdlePhase(current, openHand, timestamp) {
-  if (current.lastTrigger !== null && timestamp - current.lastTrigger < 500) return "COOLDOWN";
-  if (openHand) return "OPEN HAND";
-  return current.openHandArmed ? "ARMED" : "SHOW OPEN HAND";
+function drumIdlePhase(current, timestamp) {
+  if (current.lastTrigger !== null && timestamp - current.lastTrigger < DRUM.cooldownMs) return "COOLDOWN";
+  return "ARMED";
 }
 
 function playFingerEvents(statuses) {
@@ -594,10 +610,10 @@ page.style.addEventListener("change", () => {
   resetRecognizers();
   page.styleNote.textContent = page.style.value === "Piano"
     ? "PIANO: LEFT HAND 1.64S / RIGHT HAND 0.82S REARM."
-    : "ODYSSEUS: 75S REARM PER HAND, PLUS OPEN-HAND DRUM STROKES.";
+    : "ODYSSEUS: 75S REARM PER HAND, PLUS ARM-DOWNSTROKE DRUMS.";
   page.gestureState.textContent = page.style.value === "Piano"
     ? "Show a numbered hand shape and hold it briefly"
-    : "Open your hand, then make a downward drum stroke";
+    : "Make a downward drum stroke";
   updateChannelControls();
 });
 
