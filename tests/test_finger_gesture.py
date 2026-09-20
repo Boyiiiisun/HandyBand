@@ -37,7 +37,11 @@ def test_undefined_pattern_is_not_classified() -> None:
     assert classify_numbered_gesture(_hand("Left", (True, False, False, False, False))) is None
 
 
-def test_requires_150_ms_hold_then_repeats_after_500_ms() -> None:
+def test_alternate_three_pattern_is_classified() -> None:
+    assert classify_numbered_gesture(_hand("Left", (False, False, True, True, True))) == 3
+
+
+def test_requires_150_ms_hold_then_repeats_after_750_ms() -> None:
     recognizer = FingerGestureRecognizer()
     hand = _hand("Left", PATTERNS[1])
 
@@ -47,8 +51,8 @@ def test_requires_150_ms_hold_then_repeats_after_500_ms() -> None:
     assert first.phase == "TRIGGERED"
     assert first.recent_event is not None
 
-    assert recognizer.update((hand,), 649)[0].phase == "SAFETY WAIT"
-    repeated = recognizer.update((hand,), 650)[0]
+    assert recognizer.update((hand,), 899)[0].phase == "SAFETY WAIT"
+    repeated = recognizer.update((hand,), 900)[0]
     assert repeated.phase == "TRIGGERED"
     assert repeated.recent_event is not None
 

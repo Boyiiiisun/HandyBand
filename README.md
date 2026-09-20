@@ -4,7 +4,26 @@ HandyBand is a gesture-controlled music platform that lets one person perform li
 
 https://boyiiiisun.github.io/HandyBand/
 
-## Run locally
+## Windows app (no Python required)
+
+Download **HandyBand-v1.0.1-windows-x64.zip** from
+[GitHub Releases](https://github.com/Boyiiiisun/HandyBand/releases/tag/v1.0.1).
+Extract the entire archive and double-click **HandyBand.exe** in the HandyBand
+folder. Keep its companion files and folders together. Requires 64-bit Windows,
+a webcam and audio output. Python, dependencies, models and published audio are
+included. The app is unsigned.
+
+## Run from source with one click (Windows)
+
+Clone or download this repository, then double-click **Start HandyBand.cmd**.
+The first launch requires internet: it installs a local copy of uv, obtains
+Python 3.12 if needed, creates `.venv`, installs the locked dependencies and
+downloads checksum-verified models. Later launches reuse these files.
+After `git pull`, double-click the same launcher to refresh and run.
+
+Optional camera selection: `"Start HandyBand.cmd" --camera 1` from Command Prompt.
+
+## Manual Python setup
 
 HandyBand requires Python 3.12, a webcam, and an audio output device. Run all
 commands from the repository root so the bundled audio files can be found.
@@ -71,6 +90,9 @@ imported. See [music sources, cutoff and import commands](HandyBand_Audio/Inters
 
 ## Development checks
 
+With uv installed, use `uv sync --locked --extra dev`, then `uv run pytest`
+and `uv run ruff check .`. The committed `uv.lock` pins dependencies.
+
 Install the development dependencies and run the checks from the repository
 root:
 
@@ -79,6 +101,21 @@ python -m pip install -e ".[dev]"
 python -m pytest
 python -m ruff check .
 ```
+
+## Build the Windows app
+
+On Windows with uv and Git installed:
+
+```powershell
+uv sync --locked --extra build
+uv run --locked python scripts/build_windows.py
+```
+
+The portable folder is `dist/HandyBand`. The build runs `HandyBand.exe --self-test`
+from outside the project directory to verify bundled model inference and all
+styles with dummy audio; this does not test physical camera or speaker hardware.
+Pushing a version tag runs the Windows release workflow, tests and packages the
+app, then publishes the ZIP and SHA-256 checksum to GitHub Releases.
 
 ## License
 
