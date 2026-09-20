@@ -22,8 +22,8 @@ def test_cli_defaults() -> None:
 
 
 def test_odysseus_default_sound_is_grouped_with_its_style() -> None:
-    assert Odysseus.left_safety_interval_ms == 750
-    assert Odysseus.right_safety_interval_ms == 750
+    assert Odysseus.left_safety_interval_ms == 75_000
+    assert Odysseus.right_safety_interval_ms == 75_000
     assert Path("HandyBand_Audio/Odysseus/drum.wav") == DEFAULT_DRUM_SOUND_PATH
     assert DEFAULT_DRUM_SOUND_PATH.is_file()
 
